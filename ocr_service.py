@@ -2,6 +2,7 @@
 """
 OCR Service for Receipt Text Extraction
 Supports both EasyOCR (more accurate) and Tesseract (lightweight)
+Supports both images (JPG, PNG) and PDF files
 """
 
 import re
@@ -14,10 +15,19 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Check for PDF support
+try:
+    from pdf2image import convert_from_path
+    import numpy as np
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+    logger.warning("PDF support not available. Install with: pip3 install pdf2image")
+
 
 class OCRService:
     """
-    OCR service for extracting text from receipt images.
+    OCR service for extracting text from receipt images and PDFs.
     Supports both EasyOCR and Tesseract OCR engines.
     """
     
@@ -49,7 +59,7 @@ class OCRService:
             logger.info("EasyOCR initialized successfully")
         except ImportError:
             raise ImportError(
-                "EasyOCR not installed. Install with: pip install easyocr"
+                "EasyOCR not installed. Install with: pip3 install easyocr"
             )
         except Exception as e:
             logger.error(f"Failed to initialize EasyOCR: {e}")
@@ -67,7 +77,7 @@ class OCRService:
             logger.info("Tesseract initialized successfully")
         except ImportError:
             raise ImportError(
-                "pytesseract not installed. Install with: pip install pytesseract pillow"
+                "pytesseract not installed. Install with: pip3 install pytesseract pillow"
             )
         except pytesseract.TesseractNotFoundError:
             raise RuntimeError(
@@ -77,16 +87,76 @@ class OCRService:
                 "  Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
             )
     
+    def _is_pdf(self, file_path: str) -> bool:
+        """Check if file is a PDF."""
+        return file_path.lower().endswith('.pdf')
+    
+    def _pdf_to_images(self, pdf_path: str) -> List:
+        """
+        Convert PDF pages to images.
+        Returns list of PIL Image objects.
+        """
+        if not PDF_SUPPORT:
+            raise ImportError(
+                "PDF support not available. Install with: pip3 install pdf2image\n"
+                "Also install poppler:\n"
+                "  macOS: brew install poppler\n"
+                "  Ubuntu: sudo apt-get install poppler-utils\n"
+                "  Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases/"
+            )
+        
+        try:
+            # Convert PDF to images (one per page)
+            logger.info(f"Converting PDF to images: {pdf_path}")
+            images = convert_from_path(pdf_path, dpi=300)
+            logger.info(f"Converted {len(images)} page(s) from PDF")
+            return images
+        except Exception as e:
+            logger.error(f"Failed to convert PDF: {e}")
+            raise
+    
+    def _extract_text_from_pil_image(self, pil_image) -> str:
+        """Extract text from PIL Image using EasyOCR."""
+        import numpy as np
+        # Convert PIL image to numpy array for EasyOCR
+        image_np = np.array(pil_image)
+        result = self.reader.readtext(image_np, detail=0, paragraph=False)
+        return "\n".join(result)
+    
+    def _extract_text_tesseract_pil(self, pil_image) -> str:
+        """Extract text from PIL Image using Tesseract."""
+        config = '--psm 6'
+        text = self.reader.image_to_string(pil_image, config=config)
+        return text
+    
     def extract_text(self, image_path: str) -> str:
         """
-        Extract raw text from image.
+        Extract raw text from image or PDF.
         
         Args:
-            image_path: Path to the receipt image
+            image_path: Path to the receipt image or PDF
             
         Returns:
             Extracted text as string
         """
+        # Handle PDF files
+        if self._is_pdf(image_path):
+            logger.info(f"Processing PDF file: {image_path}")
+            images = self._pdf_to_images(image_path)
+            
+            # Extract text from all pages
+            all_text = []
+            for i, image in enumerate(images):
+                logger.info(f"Processing page {i+1}/{len(images)}")
+                if self.engine == "easyocr":
+                    text = self._extract_text_from_pil_image(image)
+                elif self.engine == "tesseract":
+                    text = self._extract_text_tesseract_pil(image)
+                all_text.append(text)
+            
+            return "\n\n--- PAGE BREAK ---\n\n".join(all_text)
+        
+        # Handle regular images
         if self.engine == "easyocr":
             return self._extract_text_easyocr(image_path)
         elif self.engine == "tesseract":
@@ -109,10 +179,10 @@ class OCRService:
     
     def parse_receipt(self, image_path: str) -> Dict[str, any]:
         """
-        Extract and parse receipt information from image.
+        Extract and parse receipt information from image or PDF.
         
         Args:
-            image_path: Path to the receipt image
+            image_path: Path to the receipt image or PDF
             
         Returns:
             Dictionary with parsed receipt data
@@ -298,49 +368,14 @@ def create_ocr_service(engine: str = "easyocr", languages: List[str] = None) -> 
 def extract_receipt_data(image_path: str, engine: str = "easyocr", 
                         languages: List[str] = None) -> Dict[str, any]:
     """
-    Convenience function to extract receipt data from image.
+    Convenience function to extract receipt data from image or PDF.
     
     Args:
-        image_path: Path to receipt image
+        image_path: Path to receipt image or PDF
         engine: OCR engine to use
         languages: List of language codes
     
     Returns:
         Dictionary with extracted receipt data
     """
-    service = create_ocr_service(engine=engine, languages=languages)
-    return service.parse_receipt(image_path)
-
-
-if __name__ == "__main__":
-    # Test the OCR service
-    import sys
     
-    if len(sys.argv) < 2:
-        print("Usage: python ocr_service.py <image_path> [engine]")
-        print("  engine: easyocr (default) or tesseract")
-        sys.exit(1)
-    
-    image_path = sys.argv[1]
-    engine = sys.argv[2] if len(sys.argv) > 2 else "easyocr"
-    
-    print(f"Processing receipt with {engine}...")
-    print("-" * 60)
-    
-    try:
-        data = extract_receipt_data(image_path, engine=engine, languages=['en', 'nl'])
-        
-        print(f"\nShop: {data['shop']}")
-        print(f"Date: {data['purchase_date']}")
-        print(f"Total: €{data['total_amount']}" if data['total_amount'] else "Total: Not found")
-        print(f"\nItems found: {len(data['items'])}")
-        for item in data['items']:
-            print(f"  - {item['name']}: €{item['price']}")
-        
-        print("\n" + "-" * 60)
-        print("Raw extracted text:")
-        print(data['raw_text'])
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
