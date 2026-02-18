@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // Event Listeners
 function setupEventListeners() {
     // Drop zone
+        
+    // Prevent default drag behavior on entire window to avoid opening files in browser
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        window.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
 
