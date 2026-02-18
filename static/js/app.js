@@ -39,6 +39,15 @@ function setupEventListeners() {
     const fileInput = document.getElementById('fileInput');
 
     dropZone.addEventListener('click', () => fileInput.click());
+    // Add click handler for browse link
+    const browseLink = document.querySelector('.browse-link');
+    if (browseLink) {
+        browseLink.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent double-triggering from dropZone click
+            fileInput.click();
+        });
+    }
+
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('drag-over');
