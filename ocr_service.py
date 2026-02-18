@@ -234,7 +234,7 @@ class OCRService:
             # Check if line contains total keyword
             if any(keyword in line_lower for keyword in total_keywords):
                 # Extract number from this line or next line
-                for check_line in [line, lines[i+1] if i+1 < len(lines) else "']:
+                for check_line in [line, lines[i+1] if i+1 < len(lines) else ""]:
                     # Find currency amounts (e.g., 12.34, €12.34, $12.34)
                     amounts = re.findall(r'[€$]?\s*(\d+[.,]\d{2})', check_line)
                     if amounts:
