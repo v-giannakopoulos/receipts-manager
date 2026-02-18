@@ -100,17 +100,39 @@ def load_data():
         return {"receipts": [], "items": [], "next_id": 1}
 
 def save_data(data):
+    """
+    Save data to disk. A backup is created only when the meaningful content
+    has actually changed (integrity_issues is excluded from the comparison
+    because it is refreshed every 30 s by the background worker).
+    At most 20 backups are kept; older ones are pruned automatically.
+    """
     try:
+        new_content = json.dumps(data, indent=2, ensure_ascii=False)
+
         if DATA_FILE.exists():
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup = BACKUP_DIR / f"data_backup_{ts}.json"
-            shutil.copy2(DATA_FILE, backup)
-            backups = sorted(BACKUP_DIR.glob("data_backup_*.json"))
-            if len(backups) > 20:
-                for b in backups[:-20]:
-                    b.unlink(missing_ok=True)
+            try:
+                existing = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+                existing.pop("integrity_issues", None)
+                new_cmp = json.loads(new_content)
+                new_cmp.pop("integrity_issues", None)
+                changed = (
+                    json.dumps(new_cmp, sort_keys=True)
+                    != json.dumps(existing, sort_keys=True)
+                )
+            except Exception:
+                changed = True
+
+            if changed:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup = BACKUP_DIR / f"data_backup_{ts}.json"
+                shutil.copy2(DATA_FILE, backup)
+                backups = sorted(BACKUP_DIR.glob("data_backup_*.json"))
+                if len(backups) > 20:
+                    for b in backups[:-20]:
+                        b.unlink(missing_ok=True)
+
         with DATA_FILE.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write(new_content)
         return True
     except Exception:
         return False
@@ -354,6 +376,49 @@ class Handler(BaseHTTPRequestHandler):
             csv_data = output.getvalue()
             self._set_headers(200, "text/csv; charset=utf-8")
             self.wfile.write(csv_data.encode("utf-8"))
+            return
+
+        # ── Serve a stored receipt / warranty file ──────────────────────────
+        # Usage: GET /api/file?path=_Receipts/uploads/somefile.pdf
+        if path == "/api/file":
+            qs_params = parse_qs(parsed.query)
+            rel = qs_params.get("path", [None])[0]
+            if not rel:
+                self._set_headers(400, "text/plain")
+                self.wfile.write(b"Missing 'path' parameter")
+                return
+            try:
+                target = (BASE_DIR / rel).resolve()
+                base_resolved = BASE_DIR.resolve()
+                # Security: must stay inside BASE_DIR
+                if not str(target).startswith(str(base_resolved) + "/") and target != base_resolved:
+                    self._set_headers(403, "text/plain")
+                    self.wfile.write(b"Forbidden")
+                    return
+                if not target.exists() or not target.is_file():
+                    self._set_headers(404, "text/plain")
+                    self.wfile.write(b"File not found")
+                    return
+                suffix = target.suffix.lower()
+                file_content_types = {
+                    ".pdf":  "application/pdf",
+                    ".jpg":  "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png":  "image/png",
+                    ".gif":  "image/gif",
+                    ".webp": "image/webp",
+                }
+                ctype = file_content_types.get(suffix, "application/octet-stream")
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Disposition", f'inline; filename="{target.name}"')
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(target.read_bytes())
+            except Exception as e:
+                self._set_headers(500, "text/plain")
+                self.wfile.write(f"Error: {e}".encode())
             return
 
         self._set_headers(404, "text/plain")

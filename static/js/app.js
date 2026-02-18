@@ -15,7 +15,9 @@ const API = {
   importJson: '/api/import/json',
   integrityCheck: '/api/integrity/check',
   upload: '/api/upload',
-  updateItem: (id) => `/api/item/${id}`
+  updateItem: (id) => `/api/item/${id}`,
+  deleteItem: (id) => `/api/item/${id}`,
+  fileUrl: (path) => `/api/file?path=${encodeURIComponent(path)}`
 };
 
 function $(id) { return document.getElementById(id); }
@@ -163,7 +165,8 @@ function buildRows() {
       users: it.users || [], project: it.project || '',
       shop: r.shop || '', purchase_date: r.purchase_date || '',
       documentation: r.documentation || '', guarantee_end_date: it.guarantee_end_date || '',
-      file: r.receipt_filename || it.receipt_relative_path || ''
+      file: r.receipt_filename || it.receipt_relative_path || '',
+      receipt_relative_path: r.receipt_relative_path || it.receipt_relative_path || ''
     };
   });
 }
@@ -176,7 +179,13 @@ function renderTable(rows) {
     if ($('itemCount')) $('itemCount').textContent = '0 items';
     return;
   }
-  tbody.innerHTML = rows.map(r => `
+  tbody.innerHTML = rows.map(r => {
+    // Build file cell: clickable link if we have a path, plain text otherwise
+    const fileCell = r.receipt_relative_path
+      ? `<a href="${API.fileUrl(r.receipt_relative_path)}" target="_blank" class="file-link" title="${r.receipt_relative_path}">${r.file || r.receipt_relative_path}</a>`
+      : (r.file ? r.file : '');
+
+    return `
     <tr>
       <td data-column="id">${r.id ?? ''}</td>
       <td data-column="receipt_group_id">${r.receipt_group_id ?? ''}</td>
@@ -189,12 +198,13 @@ function renderTable(rows) {
       <td data-column="purchase_date">${r.purchase_date ?? ''}</td>
       <td data-column="documentation">${r.documentation ?? ''}</td>
       <td data-column="guarantee_end_date">${r.guarantee_end_date ?? ''}</td>
-      <td data-column="file">${r.file ?? ''}</td>
+      <td data-column="file">${fileCell}</td>
       <td data-column="actions">
-        <button type="button" class="btn-small btn-edit" onclick="editItem(${r.id})">Edit</button>
+        <button type="button" class="btn-small btn-edit"   onclick="editItem(${r.id})">Edit</button>
+        <button type="button" class="btn-small btn-delete" onclick="deleteItem(${r.id})">Delete</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
   if ($('itemCount')) $('itemCount').textContent = `${rows.length} items`;
   updateColumnVisibility();
 }
@@ -334,6 +344,56 @@ async function editItem(itemId) {
 
   $('modalItemsPreview').style.display = 'none';
   $('ocrModal').style.display = 'flex';
+}
+
+async function deleteItem(itemId) {
+  const item = allData.items.find(i => i.id === itemId);
+  if (!item) { alert('Item not found'); return; }
+
+  const itemsInGroup = allData.items.filter(i => i.receipt_group_id === item.receipt_group_id);
+  const receipt = allData.receipts.find(r => r.receipt_group_id === item.receipt_group_id);
+  const hasFile = !!(receipt && receipt.receipt_relative_path);
+
+  let msg;
+  if (itemsInGroup.length === 1) {
+    // Last item linked to this receipt — file will be deleted too
+    if (hasFile) {
+      msg =
+        `⚠️  PERMANENT DELETE — please read carefully!\n\n` +
+        `You are about to delete:\n` +
+        `  • Record  : ID ${itemId} (${item.brand || 'N/A'} ${item.model || 'N/A'})\n` +
+        `  • File    : ${receipt.receipt_filename || receipt.receipt_relative_path}\n\n` +
+        `The receipt FILE WILL BE DELETED from disk.\n` +
+        `This action cannot be undone.\n\n` +
+        `Continue?`;
+    } else {
+      msg =
+        `⚠️  PERMANENT DELETE\n\n` +
+        `You are about to delete record ID ${itemId}.\n` +
+        `No file is associated with this record.\n\n` +
+        `Continue?`;
+    }
+  } else {
+    // Other items still reference this receipt — file is kept
+    msg =
+      `⚠️  DELETE RECORD\n\n` +
+      `You are about to delete record ID ${itemId}.\n\n` +
+      `ℹ️  The receipt file will NOT be deleted — it is shared\n` +
+      `with ${itemsInGroup.length - 1} other item(s) in group ${item.receipt_group_id}.\n\n` +
+      `Continue?`;
+  }
+
+  if (!confirm(msg)) return;
+
+  try {
+    const resp = await fetchJson(API.deleteItem(itemId), { method: 'DELETE' });
+    if (!resp.success) { alert(`Delete failed: ${resp.error || 'Unknown error'}`); return; }
+    await loadData();
+    await loadSuggestions();
+  } catch (err) {
+    console.error('Delete error:', err);
+    alert(`Delete failed: ${err.message}`);
+  }
 }
 
 function setupEventListeners() {
