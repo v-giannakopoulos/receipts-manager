@@ -1,128 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Receipt & Warranty Manager</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
-
 <body>
-  <div class="container">
-    <header>
-      <h1>📦 Receipt & Warranty Manager</h1>
-    </header>
 
-    <div class="toolbar">
-      <button type="button" id="importBtn" class="btn btn-primary">📥 Import JSON</button>
-      <button type="button" id="exportJsonBtn" class="btn btn-secondary">📤 Export JSON</button>
-      <button type="button" id="exportCsvBtn" class="btn btn-secondary">📊 Export CSV</button>
-      <button type="button" id="refreshBtn" class="btn btn-icon" title="Reload data & suggestions" aria-label="Reload data & suggestions">🔄</button>
-
-      <!-- Hidden file input used by importBtn -->
-      <input type="file" id="importInput" accept="application/json" hidden />
-    </div>
-
-    <div id="integrityBanner" class="banner-error" style="display:none;">
-      <span id="integrityMessage"></span>
-      <button type="button" id="recheckBtn" class="btn-small">🔄 Re-check Files Now</button>
-      <button type="button" id="closeBannerBtn" class="btn-small" aria-label="Close">✕</button>
-    </div>
-
-    <!-- Upload zone MUST be #dropZone for your JS -->
-    <div class="upload-zone" id="dropZone">
-      <div class="upload-content">
-        <div class="upload-icon">📄</div>
-        <p>
-          Drag &amp; Drop receipt file here or
-          <span class="browse-link" style="color:#2196f3; cursor:pointer; text-decoration:underline;">click to browse</span>
-        </p>
-        <p class="upload-hint">Supported: PDF, JPG, PNG (max 50MB)</p>
-      </div>
-      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" hidden />
-    </div>
-
-    <div class="filters">
-      <input type="text" id="searchInput" placeholder="🔍 Search items..." class="search-input" />
-      <select id="projectFilter" class="filter-select">
-        <option value="">All Projects</option>
-      </select>
-      <select id="statusFilter" class="filter-select">
-        <option value="">All Status</option>
-        <option value="active">Active</option>
-        <option value="expiring">Expiring Soon (90d)</option>
-        <option value="expired">Expired</option>
-      </select>
-      <select id="userFilter" class="filter-select">
-        <option value="">All Users</option>
-      </select>
-      <button type="button" id="columnToggleBtn" class="btn btn-icon" title="Toggle columns">⚙️ Columns</button>
-    </div>
-
-    <!-- Column panel MUST exist for your JS -->
-    <div id="columnPanel" class="column-panel" style="display:none;">
-      <div class="column-panel-header">
-        <strong>Visible columns</strong>
-        <button type="button" id="closeColumnPanel" class="btn-small">✕</button>
-      </div>
-
-      <div class="column-panel-body">
-        <label><input class="col-toggle" type="checkbox" data-column="id" checked /> ID</label>
-        <label><input class="col-toggle" type="checkbox" data-column="receipt_group_id" checked /> Receipt Group</label>
-        <label><input class="col-toggle" type="checkbox" data-column="brand" checked /> Brand</label>
-        <label><input class="col-toggle" type="checkbox" data-column="model" checked /> Model</label>
-        <label><input class="col-toggle" type="checkbox" data-column="location" checked /> Location</label>
-        <label><input class="col-toggle" type="checkbox" data-column="users" checked /> Users</label>
-        <label><input class="col-toggle" type="checkbox" data-column="project" checked /> Project</label>
-        <label><input class="col-toggle" type="checkbox" data-column="shop" checked /> Shop</label>
-        <label><input class="col-toggle" type="checkbox" data-column="purchase_date" checked /> Purchase Date</label>
-        <label><input class="col-toggle" type="checkbox" data-column="documentation" checked /> Documentation</label>
-        <label><input class="col-toggle" type="checkbox" data-column="guarantee" checked /> Guarantee</label>
-        <label><input class="col-toggle" type="checkbox" data-column="guarantee_end_date" checked /> Guarantee End Date</label>
-        <label><input class="col-toggle" type="checkbox" data-column="file" checked /> File</label>
-      </div>
-    </div>
-
-    <div class="table-container">
-      <table id="itemsTable">
-        <thead>
-          <tr>
-            <th class="sortable" data-column="id">ID</th>
-            <th class="sortable" data-column="receipt_group_id">Receipt Group</th>
-            <th class="sortable" data-column="brand">Brand</th>
-            <th class="sortable" data-column="model">Model</th>
-            <th class="sortable" data-column="location">Location</th>
-            <th data-column="users">Users</th>
-            <th class="sortable" data-column="project">Project</th>
-            <th class="sortable" data-column="shop">Shop</th>
-            <th class="sortable" data-column="purchase_date">Purchase Date</th>
-            <th data-column="documentation">Documentation</th>
-            <th data-column="guarantee">Guarantee</th>
-            <th class="sortable" data-column="guarantee_end_date">Guarantee End Date</th>
-            <th data-column="file">File</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody id="tableBody">
-          <tr class="empty-state">
-            <td colspan="14">
-              <div class="empty-message">
-                <span class="empty-icon">📦</span>
-                <p>No items yet. Upload a receipt to get started!</p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="status-bar">
-      <span id="itemCount">0 items</span>
-    </div>
+  <!-- ===== Integrity Banner ===== -->
+  <div id="integrityBanner" style="display:none; background:#fff3cd; border:1px solid #ffc107; padding:0.75rem 1rem; margin-bottom:1rem;">
+    <span id="integrityMessage"></span>
+    <button id="closeBannerBtn" style="float:right; background:none; border:none; cursor:pointer; font-size:1.1rem;">&times;</button>
+    <button id="recheckBtn" style="margin-left:1rem;">Re-check</button>
   </div>
 
-  <!-- Datalists required by populateDataLists() -->
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <div class="header-left">
+      <h1>🧾 Receipt &amp; Warranty Manager</h1>
+    </div>
+    <div class="header-right">
+      <span id="itemCount" class="item-count">0 items</span>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ===== Upload Zone ===== -->
+    <section class="upload-section">
+      <div id="dropZone" class="drop-zone">
+        <div class="drop-zone-content">
+          <span class="drop-icon">📁</span>
+          <p>Drag &amp; Drop receipt file here or<br>
+            <a href="#" class="browse-link">click to browse</a>
+          </p>
+          <p class="drop-hint">Supported: PDF, JPG, PNG (max 50MB)</p>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">
+    </section>
+
+    <!-- ===== Toolbar ===== -->
+    <section class="toolbar">
+      <div class="toolbar-left">
+        <input type="text" id="searchInput" placeholder="🔍 Search..." class="search-input">
+
+        <select id="projectFilter" class="filter-select">
+          <option value="">All Projects</option>
+        </select>
+
+        <select id="statusFilter" class="filter-select">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="expiring">Expiring Soon</option>
+          <option value="expired">Expired</option>
+        </select>
+
+        <select id="userFilter" class="filter-select">
+          <option value="">All Users</option>
+        </select>
+      </div>
+
+      <div class="toolbar-right">
+        <button id="refreshBtn"    class="btn-secondary">🔄 Refresh</button>
+        <button id="columnToggleBtn" class="btn-secondary">🔧 Columns</button>
+        <button id="exportJsonBtn" class="btn-secondary">⬇ JSON</button>
+        <button id="exportCsvBtn"  class="btn-secondary">⬇ CSV</button>
+        <button id="importBtn"     class="btn-secondary">⬆ Import</button>
+        <input  type="file" id="importInput" accept=".json" style="display:none;">
+      </div>
+    </section>
+
+    <!-- ===== Column toggle panel ===== -->
+    <div id="columnPanel" style="display:none; background:#f9f9f9; border:1px solid #ddd; padding:1rem; margin-bottom:1rem; border-radius:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <strong>Toggle Columns</strong>
+        <button id="closeColumnPanel" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">&times;</button>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+        <label><input type="checkbox" class="col-toggle" data-column="id"                 checked> ID</label>
+        <label><input type="checkbox" class="col-toggle" data-column="receipt_group_id"   checked> Group</label>
+        <label><input type="checkbox" class="col-toggle" data-column="brand"              checked> Brand</label>
+        <label><input type="checkbox" class="col-toggle" data-column="model"              checked> Model</label>
+        <label><input type="checkbox" class="col-toggle" data-column="location"           checked> Location</label>
+        <label><input type="checkbox" class="col-toggle" data-column="users"              checked> Users</label>
+        <label><input type="checkbox" class="col-toggle" data-column="project"            checked> Project</label>
+        <label><input type="checkbox" class="col-toggle" data-column="shop"               checked> Shop</label>
+        <label><input type="checkbox" class="col-toggle" data-column="purchase_date"      checked> Purchase Date</label>
+        <label><input type="checkbox" class="col-toggle" data-column="documentation"      checked> Documentation</label>
+        <label><input type="checkbox" class="col-toggle" data-column="guarantee_end_date" checked> Guarantee End</label>
+        <label><input type="checkbox" class="col-toggle" data-column="file"               checked> File</label>
+      </div>
+    </div>
+
+    <!-- ===== Items Table ===== -->
+    <section class="table-section">
+      <div class="table-wrapper">
+        <table id="itemsTable" class="items-table">
+          <thead>
+            <tr>
+              <th data-column="id"                 class="sortable">ID</th>
+              <th data-column="receipt_group_id"   class="sortable">Group</th>
+              <th data-column="brand"              class="sortable">Brand</th>
+              <th data-column="model"              class="sortable">Model</th>
+              <th data-column="location"           class="sortable">Location</th>
+              <th data-column="users"              class="sortable">Users</th>
+              <th data-column="project"            class="sortable">Project</th>
+              <th data-column="shop"               class="sortable">Shop</th>
+              <th data-column="purchase_date"      class="sortable">Purchase Date</th>
+              <th data-column="documentation"      class="sortable">Documentation</th>
+              <th data-column="guarantee_end_date" class="sortable">Guarantee End</th>
+              <th data-column="file"               class="sortable">File</th>
+              <th data-column="actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr class="empty-state">
+              <td colspan="13">
+                <div class="empty-message">
+                  <span class="empty-icon">📦</span>
+                  <p>No items yet. Upload a receipt to get started!</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Datalists for autocomplete ===== -->
   <datalist id="shopList"></datalist>
   <datalist id="brandList"></datalist>
   <datalist id="modelList"></datalist>
@@ -131,14 +140,78 @@
   <datalist id="projectList"></datalist>
   <datalist id="userList"></datalist>
 
-  <!-- Minimal inputs so setupDateInput() + setupTagInput() don't fail.
-       If you already have modals elsewhere in your file, keep those and just ensure IDs match. -->
-  <div style="display:none;">
-    <input id="receiptDate" />
-    <input id="editDate" />
+  <!-- ===== OCR Verification Modal ===== -->
+  <div id="ocrModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📄 Verify Receipt Data</h2>
+        <button id="closeModal" class="modal-close">&times;</button>
+      </div>
 
-    <div id="userTags"><input id="userInput" list="userList" /></div>
-    <div id="editUserTags"><input id="editUserInput" list="userList" /></div>
+      <div class="modal-body">
+        <p style="background:#f0f7ff; border-left:4px solid #4CAF50; padding:1rem; margin-bottom:1.5rem; border-radius:4px; color:#333;">
+          Please verify the extracted information and make corrections if needed.
+        </p>
+
+        <form id="ocrForm">
+          <input type="hidden" id="modalItemId">
+          <input type="hidden" id="modalReceiptGroupId">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="modalShop">Shop/Store *</label>
+              <input type="text" id="modalShop" list="shopList" required>
+            </div>
+            <div class="form-group">
+              <label for="modalPurchaseDate">Purchase Date *</label>
+              <input type="date" id="modalPurchaseDate" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="modalBrand">Brand</label>
+              <input type="text" id="modalBrand" list="brandList">
+            </div>
+            <div class="form-group">
+              <label for="modalModel">Model</label>
+              <input type="text" id="modalModel" list="modelList">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="modalLocation">Location</label>
+              <input type="text" id="modalLocation" list="locationList">
+            </div>
+            <div class="form-group">
+              <label for="modalProject">Project</label>
+              <input type="text" id="modalProject" list="projectList">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="modalDocumentation">Documentation</label>
+            <input type="text" id="modalDocumentation" list="docList">
+          </div>
+
+          <div class="form-group">
+            <label for="modalUsers">Users (comma-separated)</label>
+            <input type="text" id="modalUsers" placeholder="John, Jane, Bob">
+          </div>
+
+          <div id="modalItemsPreview" style="display:none; background:#f9f9f9; padding:1rem; border-radius:6px; margin-top:1rem;">
+            <h4 style="margin-top:0; color:#666; font-size:0.9rem; text-transform:uppercase;">📦 Detected Items (preview)</h4>
+            <ul id="modalItemsList" style="list-style:none; padding:0; margin:0.5rem 0 0 0;"></ul>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="cancelModal" class="btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Save Receipt</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script src="/static/js/app.js"></script>

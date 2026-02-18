@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 Receipt & Warranty Manager (standalone, no Flask)
-Fixed static file serving + upload endpoint
+Fixed static file serving + OCR integration
 """
-
 import json
 import shutil
 import re
@@ -14,13 +13,15 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+# ✨ OCR integration
+from ocr_service import extract_receipt_data
+
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 RECEIPTS_DIR = BASE_DIR / "_Receipts"
 BACKUP_DIR = DATA_DIR / "backups"
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
-
 DATA_FILE = DATA_DIR / "data.json"
 
 for d in (DATA_DIR, RECEIPTS_DIR, BACKUP_DIR):
@@ -41,14 +42,12 @@ def sanitize_filename(text, max_length=50):
         text = text[:max_length].rstrip("-")
     return text or "unnamed"
 
-
 def format_date_for_filename(date_str):
     try:
         dt = datetime.strptime(date_str, "%Y-%b-%d")
         return dt.strftime("%Y%b%d")
     except Exception:
         return date_str.replace("-", "")
-
 
 def calculate_guarantee_end_date(purchase_date, duration, unit):
     if duration == 0:
@@ -88,7 +87,6 @@ def calculate_guarantee_end_date(purchase_date, duration, unit):
     except Exception:
         return "N/A"
 
-
 def load_data():
     if not DATA_FILE.exists():
         return {"receipts": [], "items": [], "next_id": 1}
@@ -100,7 +98,6 @@ def load_data():
         return data
     except Exception:
         return {"receipts": [], "items": [], "next_id": 1}
-
 
 def save_data(data):
     try:
@@ -118,7 +115,6 @@ def save_data(data):
     except Exception:
         return False
 
-
 def generate_receipt_group_id(data):
     ids = [r["receipt_group_id"] for r in data.get("receipts", [])]
     numbers = []
@@ -127,7 +123,6 @@ def generate_receipt_group_id(data):
         if m:
             numbers.append(int(m.group(1)))
     return f"RG-{(max(numbers, default=0)+1):04d}"
-
 
 def build_single_item_filename(item, receipt, ext):
     parts = [
@@ -147,7 +142,6 @@ def build_single_item_filename(item, receipt, ext):
         full = f"{base}{ext}"
     return full
 
-
 def build_multi_item_filename(receipt, ext):
     parts = [
         sanitize_filename(receipt["shop"], 40),
@@ -164,12 +158,10 @@ def build_multi_item_filename(receipt, ext):
         full = f"{base}{ext}"
     return full
 
-
 def get_storage_directory(item):
     if item["project"] and item["project"] != "N/A":
         return BASE_DIR / sanitize_filename(item["project"], 50)
     return BASE_DIR / sanitize_filename(item["brand"], 50)
-
 
 def verify_file_integrity(data):
     issues = []
@@ -188,7 +180,6 @@ def verify_file_integrity(data):
                 )
     return issues
 
-
 def integrity_worker():
     while True:
         time.sleep(30)
@@ -200,7 +191,6 @@ def integrity_worker():
         except Exception:
             pass
 
-
 def _parse_multipart_file(body: bytes, content_type: str, field_name: str = "file"):
     """
     Minimal multipart/form-data parser for a single file field.
@@ -208,27 +198,19 @@ def _parse_multipart_file(body: bytes, content_type: str, field_name: str = "fil
     """
     if not content_type or "multipart/form-data" not in content_type:
         return None, None, None
-
     m = re.search(r"boundary=([^;]+)", content_type)
     if not m:
         return None, None, None
-
     boundary = m.group(1).strip().strip('"')
     b_boundary = ("--" + boundary).encode("utf-8")
-
-    # Split into parts; body format uses CRLF and boundary separators
     parts = body.split(b_boundary)
     for part in parts:
         part = part.strip()
         if not part or part == b"--":
             continue
-
-        # Each part: headers \r\n\r\n content \r\n
         if b"\r\n\r\n" not in part:
             continue
         raw_headers, raw_content = part.split(b"\r\n\r\n", 1)
-
-        # Remove trailing CRLF and possible closing markers
         raw_content = raw_content.rstrip(b"\r\n")
         header_lines = raw_headers.decode("utf-8", errors="replace").split("\r\n")
         headers = {}
@@ -236,29 +218,22 @@ def _parse_multipart_file(body: bytes, content_type: str, field_name: str = "fil
             if ":" in line:
                 k, v = line.split(":", 1)
                 headers[k.strip().lower()] = v.strip()
-
         disp = headers.get("content-disposition", "")
-        # Expect: form-data; name="file"; filename="something.ext"
         if "form-data" not in disp or f'name="{field_name}"' not in disp:
             continue
-
         fn_m = re.search(r'filename="([^"]+)"', disp)
         filename = fn_m.group(1) if fn_m else "upload.bin"
         part_ctype = headers.get("content-type", "application/octet-stream")
         return filename, raw_content, part_ctype
-
     return None, None, None
-
 
 def _today_ymmmdd():
     return datetime.now().strftime("%Y-%b-%d")
-
 
 # ---------- HTTP handler ----------
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Suppress request logging to keep console clean
         pass
 
     def _set_headers(self, status=200, content_type="application/json"):
@@ -277,7 +252,6 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # Root / index
         if path == "/" or path == "/index.html":
             index_file = TEMPLATES_DIR / "index.html"
             if not index_file.exists():
@@ -289,19 +263,14 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(html)
             return
 
-        # Static files
         if path.startswith("/static/"):
             rel_path = path.replace("/static/", "", 1)
-            file_path = STATIC_DIR / rel_path
-            
-            if not file_path.exists() or not file_path.is_file():
-                print(f"404: {file_path} not found")
+            filepath = STATIC_DIR / rel_path
+            if not filepath.exists() or not filepath.is_file():
                 self._set_headers(404, "text/plain")
                 self.wfile.write(b"File not found")
                 return
-            
-            # Determine content type
-            suffix = file_path.suffix.lower()
+            suffix = filepath.suffix.lower()
             content_types = {
                 ".css": "text/css",
                 ".js": "application/javascript",
@@ -314,12 +283,10 @@ class Handler(BaseHTTPRequestHandler):
                 ".ico": "image/x-icon",
             }
             ctype = content_types.get(suffix, "text/plain")
-            
             self._set_headers(200, f"{ctype}; charset=utf-8")
-            self.wfile.write(file_path.read_bytes())
+            self.wfile.write(filepath.read_bytes())
             return
 
-        # API endpoints
         if path == "/api/data":
             with data_lock:
                 data = load_data()
@@ -331,26 +298,22 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/suggestions":
             with data_lock:
                 data = load_data()
-                shops = {r["shop"] for r in data.get("receipts", []) if r.get("shop")}
-                brands = {i["brand"] for i in data.get("items", []) if i.get("brand")}
-                models = {i["model"] for i in data.get("items", []) if i.get("model")}
-                locations = {i["location"] for i in data.get("items", []) if i.get("location")}
-                docs = {r["documentation"] for r in data.get("receipts", []) if r.get("documentation")}
-                projects = {
-                    i["project"]
-                    for i in data.get("items", [])
-                    if i.get("project") and i["project"] != "N/A"
-                }
-                users = {u for i in data.get("items", []) for u in i.get("users", [])}
-                payload = {
-                    "shops": sorted(shops),
-                    "brands": sorted(brands),
-                    "models": sorted(models),
-                    "locations": sorted(locations),
-                    "documentation": sorted(docs),
-                    "projects": sorted(projects),
-                    "users": sorted(users),
-                }
+            shops = [r["shop"] for r in data.get("receipts", []) if r.get("shop")]
+            brands = [i["brand"] for i in data.get("items", []) if i.get("brand")]
+            models = [i["model"] for i in data.get("items", []) if i.get("model")]
+            locations = [i["location"] for i in data.get("items", []) if i.get("location")]
+            docs = [r["documentation"] for r in data.get("receipts", []) if r.get("documentation")]
+            projects = [i["project"] for i in data.get("items", []) if i.get("project") and i["project"] != "N/A"]
+            users = [u for i in data.get("items", []) for u in i.get("users", [])]
+            payload = {
+                "shops": sorted(set(shops)),
+                "brands": sorted(set(brands)),
+                "models": sorted(set(models)),
+                "locations": sorted(set(locations)),
+                "documentation": sorted(set(docs)),
+                "projects": sorted(set(projects)),
+                "users": sorted(set(users)),
+            }
             self._set_headers(200)
             self.wfile.write(json.dumps(payload).encode("utf-8"))
             return
@@ -358,7 +321,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/export/json":
             with data_lock:
                 data = load_data()
-                data.pop("integrity_issues", None)
+            data.pop("integrity_issues", None)
             self._set_headers(200, "application/json; charset=utf-8")
             self.wfile.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
             return
@@ -371,47 +334,23 @@ class Handler(BaseHTTPRequestHandler):
                 data = load_data()
             output = StringIO()
             writer = csv.writer(output)
-            writer.writerow(
-                [
-                    "Item ID",
-                    "Receipt Group ID",
-                    "Brand",
-                    "Model",
-                    "Location",
-                    "Users",
-                    "Project",
-                    "Shop",
-                    "Purchase Date",
-                    "Documentation",
-                    "Guarantee Duration",
-                    "Guarantee Unit",
-                    "Guarantee End Date",
-                    "Receipt Filename",
-                    "Receipt Path",
-                ]
-            )
+            writer.writerow([
+                "Item ID", "Receipt Group ID", "Brand", "Model", "Location", "Users",
+                "Project", "Shop", "Purchase Date", "Documentation", "Guarantee Duration",
+                "Guarantee Unit", "Guarantee End Date", "Receipt Filename", "Receipt Path"
+            ])
             receipts_map = {r["receipt_group_id"]: r for r in data.get("receipts", [])}
             for item in data.get("items", []):
                 r = receipts_map.get(item["receipt_group_id"], {})
-                writer.writerow(
-                    [
-                        item["id"],
-                        item["receipt_group_id"],
-                        item.get("brand", ""),
-                        item.get("model", ""),
-                        item.get("location", ""),
-                        ", ".join(item.get("users", [])),
-                        item.get("project", ""),
-                        r.get("shop", ""),
-                        r.get("purchase_date", ""),
-                        r.get("documentation", ""),
-                        item.get("guarantee_duration", 0),
-                        item.get("guarantee_unit", "days"),
-                        item.get("guarantee_end_date", ""),
-                        r.get("receipt_filename", ""),
-                        item.get("receipt_relative_path", ""),
-                    ]
-                )
+                writer.writerow([
+                    item["id"], item["receipt_group_id"], item.get("brand", ""),
+                    item.get("model", ""), item.get("location", ""),
+                    ";".join(item.get("users", [])), item.get("project", ""),
+                    r.get("shop", ""), r.get("purchase_date", ""), r.get("documentation", ""),
+                    item.get("guarantee_duration", 0), item.get("guarantee_unit", "days"),
+                    item.get("guarantee_end_date", ""), r.get("receipt_filename", ""),
+                    item.get("receipt_relative_path", "")
+                ])
             csv_data = output.getvalue()
             self._set_headers(200, "text/csv; charset=utf-8")
             self.wfile.write(csv_data.encode("utf-8"))
@@ -421,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"Not found")
 
     def _read_json(self):
-        length = int(self.headers.get("Content-Length", "0") or "0")
+        length = int(self.headers.get("Content-Length", 0) or 0)
         body = self.rfile.read(length) if length > 0 else b""
         if not body:
             return {}
@@ -434,26 +373,24 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # NEW: File upload endpoint
         if path == "/api/upload":
-            # Limit: 50MB
-            length = int(self.headers.get("Content-Length", "0") or "0")
+            length = int(self.headers.get("Content-Length", 0) or 0)
             max_len = 50 * 1024 * 1024
-            if length <= 0 or length > max_len:
+            if length == 0 or length > max_len:
                 self._set_headers(400)
                 self.wfile.write(b'{"success":false,"error":"Invalid or too large upload"}')
                 return
 
             body = self.rfile.read(length)
             ctype = self.headers.get("Content-Type", "")
-
             filename, file_bytes, part_type = _parse_multipart_file(body, ctype, field_name="file")
+
             if not file_bytes:
                 self._set_headers(400)
                 self.wfile.write(b'{"success":false,"error":"No file field found"}')
                 return
 
-            # Save uploaded file under _Receipts/uploads/
+            # Save uploaded file
             ext = Path(filename).suffix.lower() or ".bin"
             safe_base = sanitize_filename(Path(filename).stem, max_length=80)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -462,20 +399,34 @@ class Handler(BaseHTTPRequestHandler):
             saved_name = f"{ts}_{safe_base}{ext}"
             saved_path = upload_dir / saved_name
             saved_path.write_bytes(file_bytes)
-
             rel_path = str(saved_path.relative_to(BASE_DIR))
 
-            # Create a placeholder receipt + one placeholder item
+            # ✨ Run OCR extraction
+            ocr_data = {"shop": "N/A", "purchase_date": "N/A", "total_amount": None, "items": []}
+            try:
+                ocr_result = extract_receipt_data(
+                    str(saved_path),
+                    engine="easyocr",
+                    languages=["en", "nl", "el", "lv"]  # English, Dutch, Greek, Latvian
+                )
+                ocr_data = {
+                    "shop": ocr_result.get("shop", "N/A"),
+                    "purchase_date": ocr_result.get("purchase_date", _today_ymmmdd()),
+                    "total_amount": ocr_result.get("total_amount"),
+                    "items": ocr_result.get("items", [])[:3],
+                    "raw_text": ocr_result.get("raw_text", "")[:500]
+                }
+            except Exception as e:
+                print(f"OCR extraction failed: {e}")
+
             with data_lock:
                 data = load_data()
 
-                # New receipt group id
-                rgid = generate_receipt_group_id(data)
-
+                rg_id = generate_receipt_group_id(data)
                 receipt = {
-                    "receipt_group_id": rgid,
-                    "shop": "N/A",
-                    "purchase_date": _today_ymmmdd(),
+                    "receipt_group_id": rg_id,
+                    "shop": ocr_data["shop"],
+                    "purchase_date": ocr_data["purchase_date"],
                     "documentation": "N/A",
                     "receipt_filename": saved_name,
                     "receipt_relative_path": rel_path,
@@ -485,7 +436,7 @@ class Handler(BaseHTTPRequestHandler):
                 item_id = int(data.get("next_id", 1))
                 item = {
                     "id": item_id,
-                    "receipt_group_id": rgid,
+                    "receipt_group_id": rg_id,
                     "brand": "N/A",
                     "model": "N/A",
                     "location": "N/A",
@@ -502,14 +453,15 @@ class Handler(BaseHTTPRequestHandler):
                 save_data(data)
 
             self._set_headers(200)
-            self.wfile.write(json.dumps({
+            payload = {
                 "success": True,
-                "receipt_group_id": rgid,
+                "receipt_group_id": rg_id,
                 "item_id": item_id,
                 "receipt_filename": saved_name,
                 "receipt_relative_path": rel_path,
-                "content_type": part_type,
-            }).encode("utf-8"))
+                "ocr_data": ocr_data
+            }
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
             return
 
         if path == "/api/integrity/check":
@@ -530,9 +482,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with data_lock:
                 if "next_id" not in imported:
-                    imported["next_id"] = max(
-                        (i["id"] for i in imported.get("items", [])), default=0
-                    ) + 1
+                    imported["next_id"] = max((i["id"] for i in imported.get("items", [])), default=0) + 1
                 save_data(imported)
             self._set_headers(200)
             self.wfile.write(b'{"success":true,"message":"Data imported successfully"}')
@@ -554,6 +504,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             updates = self._read_json()
+
             with data_lock:
                 data = load_data()
                 item = next((i for i in data["items"] if i["id"] == item_id), None)
@@ -561,17 +512,14 @@ class Handler(BaseHTTPRequestHandler):
                     self._set_headers(404)
                     self.wfile.write(b'{"success":false,"error":"Item not found"}')
                     return
-                receipt = next(
-                    (r for r in data["receipts"] if r["receipt_group_id"] == item["receipt_group_id"]), None
-                )
+
+                receipt = next((r for r in data["receipts"] if r["receipt_group_id"] == item["receipt_group_id"]), None)
                 if not receipt:
                     self._set_headers(404)
                     self.wfile.write(b'{"success":false,"error":"Receipt not found"}')
                     return
 
-                items_in_group = [
-                    i for i in data["items"] if i["receipt_group_id"] == item["receipt_group_id"]
-                ]
+                items_in_group = [i for i in data["items"] if i["receipt_group_id"] == item["receipt_group_id"]]
                 is_multi = len(items_in_group) > 1
 
                 old_path = None
@@ -584,26 +532,24 @@ class Handler(BaseHTTPRequestHandler):
                     nonlocal needs_move
                     if field in updates:
                         dest[field] = updates[field]
-                        if not is_multi and field in {
-                            "brand",
-                            "model",
-                            "location",
-                            "project",
-                        }:
+                        if not is_multi and field in ["brand", "model", "location", "project"]:
                             needs_move = True
 
                 u("brand", item)
                 u("model", item)
                 u("location", item)
                 u("project", item)
+
                 if "users" in updates:
-                    item["users"] = (updates["users"] or [])[:8]
+                    item["users"] = updates["users"] or []
                     if not is_multi:
                         needs_move = True
+
                 if "shop" in updates:
                     receipt["shop"] = updates["shop"]
                     if not is_multi:
                         needs_move = True
+
                 if "purchase_date" in updates:
                     receipt["purchase_date"] = updates["purchase_date"]
                     if not is_multi:
@@ -611,20 +557,24 @@ class Handler(BaseHTTPRequestHandler):
                     item["guarantee_end_date"] = calculate_guarantee_end_date(
                         receipt["purchase_date"],
                         item.get("guarantee_duration", 0),
-                        item.get("guarantee_unit", "days"),
+                        item.get("guarantee_unit", "days")
                     )
+
                 if "documentation" in updates:
                     receipt["documentation"] = updates["documentation"]
                     if not is_multi:
                         needs_move = True
+
                 if "guarantee_duration" in updates:
                     item["guarantee_duration"] = updates["guarantee_duration"]
+
                 if "guarantee_unit" in updates:
                     item["guarantee_unit"] = updates["guarantee_unit"]
+
                 item["guarantee_end_date"] = calculate_guarantee_end_date(
                     receipt["purchase_date"],
                     item.get("guarantee_duration", 0),
-                    item.get("guarantee_unit", "days"),
+                    item.get("guarantee_unit", "days")
                 )
 
                 if needs_move and old_path and old_path.exists():
@@ -633,22 +583,24 @@ class Handler(BaseHTTPRequestHandler):
                     new_dir = get_storage_directory(item)
                     new_dir.mkdir(exist_ok=True)
                     new_path = new_dir / new_name
+
                     if new_path.exists() and new_path != old_path:
                         self._set_headers(400)
                         msg = {"success": False, "error": f"Target file already exists: {new_name}"}
                         self.wfile.write(json.dumps(msg).encode("utf-8"))
                         return
+
                     try:
                         if new_path != old_path:
                             shutil.move(str(old_path), str(new_path))
-                            rel = f"{new_dir.name}/{new_name}"
-                            receipt["receipt_filename"] = new_name
-                            receipt["receipt_relative_path"] = rel
-                            item["receipt_relative_path"] = rel
-                            try:
-                                old_path.parent.rmdir()
-                            except Exception:
-                                pass
+                        rel = f"{new_dir.name}/{new_name}"
+                        receipt["receipt_filename"] = new_name
+                        receipt["receipt_relative_path"] = rel
+                        item["receipt_relative_path"] = rel
+                        try:
+                            old_path.parent.rmdir()
+                        except Exception:
+                            pass
                     except Exception as e:
                         self._set_headers(500)
                         msg = {"success": False, "error": f"Failed to move file: {e}"}
@@ -656,9 +608,10 @@ class Handler(BaseHTTPRequestHandler):
                         return
 
                 save_data(data)
-                self._set_headers(200)
-                self.wfile.write(json.dumps({"success": True, "item": item}).encode("utf-8"))
-                return
+
+            self._set_headers(200)
+            self.wfile.write(json.dumps({"success": True, "item": item}).encode("utf-8"))
+            return
 
         self._set_headers(404)
         self.wfile.write(b'{"error":"not found"}')
@@ -682,18 +635,19 @@ class Handler(BaseHTTPRequestHandler):
                     self._set_headers(404)
                     self.wfile.write(b'{"success":false,"error":"Item not found"}')
                     return
-                rgid = item["receipt_group_id"]
-                items_in_group = [i for i in data["items"] if i["receipt_group_id"] == rgid]
+
+                rg_id = item["receipt_group_id"]
+                items_in_group = [i for i in data["items"] if i["receipt_group_id"] == rg_id]
 
                 if len(items_in_group) == 1:
                     rel = item.get("receipt_relative_path")
                     if rel:
-                        path = BASE_DIR / rel
-                        if path.exists():
+                        file_path = BASE_DIR / rel
+                        if file_path.exists():
                             try:
-                                path.unlink()
+                                file_path.unlink()
                                 try:
-                                    path.parent.rmdir()
+                                    file_path.parent.rmdir()
                                 except Exception:
                                     pass
                             except Exception as e:
@@ -701,7 +655,8 @@ class Handler(BaseHTTPRequestHandler):
                                 msg = {"success": False, "error": f"Failed to delete file: {e}"}
                                 self.wfile.write(json.dumps(msg).encode("utf-8"))
                                 return
-                    data["receipts"] = [r for r in data["receipts"] if r["receipt_group_id"] != rgid]
+
+                    data["receipts"] = [r for r in data["receipts"] if r["receipt_group_id"] != rg_id]
 
                 data["items"] = [i for i in data["items"] if i["id"] != item_id]
                 save_data(data)
@@ -718,22 +673,24 @@ def main():
     print("=" * 60)
     print("Receipt & Warranty Manager")
     print("=" * 60)
-    
-    # Check for required files
+    print()
+
     if not (TEMPLATES_DIR / "index.html").exists():
-        print("\n⚠️  ERROR: templates/index.html not found!")
+        print("ERROR: templates/index.html not found!")
         print("Make sure you have:")
         print("  - templates/index.html")
         print("  - static/css/style.css")
         print("  - static/js/app.js")
         return
-    
+
     if not (STATIC_DIR / "css" / "style.css").exists():
-        print("\n⚠️  WARNING: static/css/style.css not found!")
+        print("WARNING: static/css/style.css not found!")
         print("The app will work but look unstyled.")
-    
-    print("\nStarting server on http://127.0.0.1:5000")
-    print("Press Ctrl+C to stop\n")
+        print()
+
+    print("🚀 Server on http://127.0.0.1:5000")
+    print("Press Ctrl+C to stop")
+    print()
 
     t = threading.Thread(target=integrity_worker, daemon=True)
     t.start()
@@ -742,7 +699,7 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("\n🛑 Shutting down...")
     finally:
         server.server_close()
 

@@ -3,11 +3,10 @@ let allData = { receipts: [], items: [], next_id: 1, integrity_issues: [] };
 let suggestions = { shops: [], brands: [], models: [], locations: [], documentation: [], projects: [], users: [] };
 let currentSort = { column: 'id', direction: 'asc' };
 let visibleColumns = new Set([
-  'id', 'receipt_group_id', 'brand', 'model', 'location', 'users', 'project',
-  'shop', 'purchase_date', 'documentation', 'guarantee_end_date', 'file'
+  'id', 'receipt_group_id', 'brand', 'model', 'location', 'users',
+  'project', 'shop', 'purchase_date', 'documentation', 'guarantee_end_date', 'file', 'actions'
 ]);
 
-// Backend endpoints
 const API = {
   data: '/api/data',
   suggestions: '/api/suggestions',
@@ -15,10 +14,10 @@ const API = {
   exportCsv: '/api/export/csv',
   importJson: '/api/import/json',
   integrityCheck: '/api/integrity/check',
-  upload: '/api/upload'  // NEW: upload endpoint now exists
+  upload: '/api/upload',
+  updateItem: (id) => `/api/item/${id}`
 };
 
-// ===================== DOM helpers =====================
 function $(id) { return document.getElementById(id); }
 function qs(sel) { return document.querySelector(sel); }
 function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
@@ -38,32 +37,24 @@ async function fetchJson(url, opts) {
   return await resp.json();
 }
 
-// ===================== Downloads (use server endpoints) =====================
 function downloadUrl(url) {
   const a = document.createElement('a');
-  a.href = url;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  a.href = url; a.download = '';
+  document.body.appendChild(a); a.click(); a.remove();
 }
-
 function exportJson() { downloadUrl(API.exportJson); }
-function exportCsv() { downloadUrl(API.exportCsv); }
+function exportCsv()  { downloadUrl(API.exportCsv);  }
 
-// ===================== Data loading =====================
 async function loadData() {
   try {
     allData = await fetchJson(API.data);
-
     const banner = $('integrityBanner');
     if (banner) {
       const issues = allData.integrity_issues || [];
       banner.style.display = issues.length > 0 ? 'block' : 'none';
-      if ($('integrityMessage')) $('integrityMessage').textContent =
-        issues.length > 0 ? `${issues.length} integrity issue(s) detected.` : '';
+      if ($('integrityMessage'))
+        $('integrityMessage').textContent = issues.length > 0 ? `${issues.length} integrity issue(s) detected.` : '';
     }
-
     filterAndRender();
   } catch (err) {
     console.error('Error loading data:', err);
@@ -76,19 +67,15 @@ async function loadSuggestions() {
     suggestions = await fetchJson(API.suggestions);
     populateDataLists();
     populateFilterDropdowns();
-  } catch (err) {
-    console.error('Error loading suggestions:', err);
-  }
+  } catch (err) { console.error('Error loading suggestions:', err); }
 }
 
 function populateDataLists() {
   const set = (id, arr) => {
-    const el = $(id);
-    if (!el) return;
+    const el = $(id); if (!el) return;
     const safe = Array.isArray(arr) ? arr : [];
     el.innerHTML = safe.map(s => `<option value="${String(s).replace(/"/g, '&quot;')}">`).join('');
   };
-
   set('shopList', suggestions.shops);
   set('brandList', suggestions.brands);
   set('modelList', suggestions.models);
@@ -107,7 +94,6 @@ function populateFilterDropdowns() {
         .map(p => `<option value="${String(p).replace(/"/g, '&quot;')}">${p}</option>`).join('');
     projectFilter.value = current;
   }
-
   const userFilter = $('userFilter');
   if (userFilter) {
     const current = userFilter.value;
@@ -118,7 +104,6 @@ function populateFilterDropdowns() {
   }
 }
 
-// ===================== Table join + render =====================
 function receiptMap() {
   const map = new Map();
   (allData.receipts || []).forEach(r => map.set(r.receipt_group_id, r));
@@ -135,24 +120,21 @@ function getStatus(item) {
   if (!end || end === 'N/A') return 'active';
   const d = new Date(String(end).replace(/-/g, '/'));
   if (isNaN(d)) return 'active';
-  const now = new Date();
-  const diffDays = Math.floor((d - now) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor((d - new Date()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return 'expired';
   if (diffDays <= 90) return 'expiring';
   return 'active';
 }
 
 function applyFilters(rows) {
-  const q = ($('searchInput')?.value || '').trim().toLowerCase();
+  const q       = ($('searchInput')?.value  || '').trim().toLowerCase();
   const project = $('projectFilter')?.value || '';
-  const status = $('statusFilter')?.value || '';
-  const user = $('userFilter')?.value || '';
-
+  const status  = $('statusFilter')?.value  || '';
+  const user    = $('userFilter')?.value    || '';
   return (rows || []).filter(r => {
     if (project && String(r.project || '') !== project) return false;
-    if (status && getStatus(r) !== status) return false;
-    if (user && !normalizeUsers(r.users).includes(user)) return false;
-
+    if (status  && getStatus(r) !== status) return false;
+    if (user    && !normalizeUsers(r.users).includes(user)) return false;
     if (q) {
       const hay = [
         r.id, r.receipt_group_id, r.brand, r.model, r.location, r.project,
@@ -176,17 +158,11 @@ function buildRows() {
   return (allData.items || []).map(it => {
     const r = rmap.get(it.receipt_group_id) || {};
     return {
-      id: it.id,
-      receipt_group_id: it.receipt_group_id,
-      brand: it.brand || '',
-      model: it.model || '',
-      location: it.location || '',
-      users: it.users || [],
-      project: it.project || '',
-      shop: r.shop || '',
-      purchase_date: r.purchase_date || '',
-      documentation: r.documentation || '',
-      guarantee_end_date: it.guarantee_end_date || '',
+      id: it.id, receipt_group_id: it.receipt_group_id,
+      brand: it.brand || '', model: it.model || '', location: it.location || '',
+      users: it.users || [], project: it.project || '',
+      shop: r.shop || '', purchase_date: r.purchase_date || '',
+      documentation: r.documentation || '', guarantee_end_date: it.guarantee_end_date || '',
       file: r.receipt_filename || it.receipt_relative_path || ''
     };
   });
@@ -195,21 +171,11 @@ function buildRows() {
 function renderTable(rows) {
   const tbody = $('tableBody');
   if (!tbody) return;
-
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = `
-      <tr class="empty-state">
-        <td colspan="14">
-          <div class="empty-message">
-            <span class="empty-icon">📦</span>
-            <p>No items yet. Upload a receipt to get started!</p>
-          </div>
-        </td>
-      </tr>`;
-    $('itemCount') && ($('itemCount').textContent = '0 items');
+    tbody.innerHTML = `<tr class="empty-state"><td colspan="13"><div class="empty-message"><span class="empty-icon">📦</span><p>No items yet. Upload a receipt to get started!</p></div></td></tr>`;
+    if ($('itemCount')) $('itemCount').textContent = '0 items';
     return;
   }
-
   tbody.innerHTML = rows.map(r => `
     <tr>
       <td data-column="id">${r.id ?? ''}</td>
@@ -224,197 +190,204 @@ function renderTable(rows) {
       <td data-column="documentation">${r.documentation ?? ''}</td>
       <td data-column="guarantee_end_date">${r.guarantee_end_date ?? ''}</td>
       <td data-column="file">${r.file ?? ''}</td>
-      <td data-column="actions"><button type="button" class="btn-small" disabled>Edit</button></td>
+      <td data-column="actions">
+        <button type="button" class="btn-small btn-edit" onclick="editItem(${r.id})">Edit</button>
+      </td>
     </tr>
   `).join('');
-
-  $('itemCount') && ($('itemCount').textContent = `${rows.length} items`);
+  if ($('itemCount')) $('itemCount').textContent = `${rows.length} items`;
   updateColumnVisibility();
 }
 
 function updateColumnVisibility() {
-  qsa('th[data-column]').forEach(th => {
-    const c = th.dataset.column;
-    th.style.display = visibleColumns.has(c) ? '' : 'none';
-  });
-  qsa('#itemsTable td[data-column]').forEach(td => {
-    const c = td.dataset.column;
-    td.style.display = visibleColumns.has(c) ? '' : 'none';
-  });
+  qsa('th[data-column]').forEach(th => { th.style.display = visibleColumns.has(th.dataset.column) ? '' : 'none'; });
+  qsa('#itemsTable td[data-column]').forEach(td => { td.style.display = visibleColumns.has(td.dataset.column) ? '' : 'none'; });
 }
 
 function updateSortIndicators() {
   qsa('th.sortable').forEach(th => {
     th.classList.remove('sort-asc', 'sort-desc');
-    if (th.dataset.column === currentSort.column) {
+    if (th.dataset.column === currentSort.column)
       th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-    }
   });
 }
 
 function filterAndRender() {
-  const rows = buildRows();
-  const filtered = applyFilters(rows);
-  const sorted = sortRows(filtered);
-  renderTable(sorted);
+  renderTable(sortRows(applyFilters(buildRows())));
 }
 
-// ===================== Import + integrity =====================
 async function handleImport(e) {
-  const f = e?.target?.files?.[0];
-  if (!f) return;
-
+  const f = e?.target?.files?.[0]; if (!f) return;
   try {
-    const text = await f.text();
-    const payload = JSON.parse(text);
-    await fetchJson(API.importJson, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    await loadData();
-    await loadSuggestions();
+    const payload = JSON.parse(await f.text());
+    await fetchJson(API.importJson, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    await loadData(); await loadSuggestions();
     alert('Imported successfully.');
-  } catch (err) {
-    console.error('Import failed:', err);
-    alert('Import failed (see Console).');
-  } finally {
-    e.target.value = '';
-  }
+  } catch (err) { console.error('Import failed:', err); alert('Import failed (see Console).'); }
+  finally { e.target.value = ''; }
 }
 
 async function recheckIntegrity() {
-  try {
-    await fetchJson(API.integrityCheck, { method: 'POST' });
-    await loadData();
-  } catch (err) {
-    console.error('Integrity check failed:', err);
-    await loadData();
-  }
+  try { await fetchJson(API.integrityCheck, { method: 'POST' }); await loadData(); }
+  catch (err) { console.error('Integrity check failed:', err); await loadData(); }
 }
 
-// ===================== File upload (NOW WORKING) =====================
 async function handleFile(file) {
   if (!file) return;
-
+  const formData = new FormData();
+  formData.append('file', file);
   try {
-    // Validate file type
-    const okTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-    if (file.type && !okTypes.includes(file.type)) {
-      alert('Unsupported file type. Please upload PDF, JPG, or PNG.');
-      return;
-    }
-
-    // Validate file size (50MB max)
-    const maxSize = 50 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('File too large. Maximum size is 50MB.');
-      return;
-    }
-
-    // Upload via multipart/form-data
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const resp = await fetch(API.upload, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '');
-      throw new Error(`Upload failed: ${resp.status} ${text}`);
-    }
-
+    const resp = await fetch(API.upload, { method: 'POST', body: formData });
+    if (!resp.ok) { alert(`Upload failed: ${await resp.text()}`); return; }
     const result = await resp.json();
-    console.log('Upload success:', result);
-
-    // Reload data to show new item
-    await loadData();
-    await loadSuggestions();
-
-    alert(`File uploaded successfully!\n\nReceipt Group: ${result.receipt_group_id}\nItem ID: ${result.item_id}`);
-  } catch (err) {
-    console.error('Upload error:', err);
-    alert(`Upload failed: ${err.message}`);
-  }
+    if (!result.success) { alert(`Upload failed: ${result.error || 'Unknown error'}`); return; }
+    showOcrModal(result);
+  } catch (err) { console.error('Upload error:', err); alert(`Upload failed: ${err.message}`); }
+  finally { const fi = $('fileInput'); if (fi) fi.value = ''; }
 }
 
-// ===================== Event listeners =====================
-function setupEventListeners() {
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    window.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
-  });
+function showOcrModal(uploadResult) {
+  const modal = $('ocrModal'); if (!modal) return;
+  const ocr = uploadResult.ocr_data || {};
+  $('modalItemId').value         = uploadResult.item_id;
+  $('modalReceiptGroupId').value = uploadResult.receipt_group_id;
+  $('modalShop').value           = ocr.shop || '';
+  const pd = ocr.purchase_date || '';
+  if (pd && pd !== 'N/A') {
+    try { $('modalPurchaseDate').value = new Date(pd.replace(/-/g, ' ')).toISOString().split('T')[0]; }
+    catch { $('modalPurchaseDate').value = ''; }
+  }
+  $('modalBrand').value = ''; $('modalModel').value = ''; $('modalLocation').value = '';
+  $('modalProject').value = ''; $('modalDocumentation').value = ''; $('modalUsers').value = '';
+  const itemsPreview = $('modalItemsPreview');
+  const itemsList    = $('modalItemsList');
+  if (ocr.items && ocr.items.length > 0) {
+    itemsList.innerHTML = ocr.items.map(i => `<li>${i.name} - ${i.price}</li>`).join('');
+    itemsPreview.style.display = 'block';
+  } else { itemsPreview.style.display = 'none'; }
+  modal.style.display = 'flex';
+}
 
-  const dropZone = $('dropZone');
+function closeOcrModal() {
+  const modal = $('ocrModal');
+  if (modal) { modal.style.display = 'none'; $('ocrForm').reset(); }
+}
+
+async function saveOcrData(e) {
+  e.preventDefault();
+  const itemId         = parseInt($('modalItemId').value);
+  const receiptGroupId = $('modalReceiptGroupId').value;
+  if (!itemId || !receiptGroupId) { alert('Invalid item or receipt ID'); return; }
+
+  const shop          = $('modalShop').value.trim();
+  const purchaseDate  = $('modalPurchaseDate').value;
+  const brand         = $('modalBrand').value.trim()         || 'N/A';
+  const model         = $('modalModel').value.trim()         || 'N/A';
+  const location      = $('modalLocation').value.trim()      || 'N/A';
+  const project       = $('modalProject').value.trim()       || 'N/A';
+  const documentation = $('modalDocumentation').value.trim() || 'N/A';
+  const usersInput    = $('modalUsers').value.trim();
+  const users         = usersInput ? usersInput.split(',').map(u => u.trim()).filter(Boolean) : [];
+
+  if (!shop || !purchaseDate) { alert('Shop and Purchase Date are required'); return; }
+
+  let formattedDate = purchaseDate;
+  try {
+    const d = new Date(purchaseDate + 'T00:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    formattedDate = `${d.getFullYear()}-${months[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')}`;
+  } catch { /* keep original */ }
+
+  try {
+    const resp = await fetchJson(API.updateItem(itemId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shop, purchase_date: formattedDate, brand, model, location, project, documentation, users })
+    });
+    if (!resp.success) { alert(`Save failed: ${resp.error || 'Unknown error'}`); return; }
+    closeOcrModal();
+    await loadData(); await loadSuggestions();
+  } catch (err) { console.error('Save error:', err); alert(`Save failed: ${err.message}`); }
+}
+
+async function editItem(itemId) {
+  const item = allData.items.find(i => i.id === itemId);
+  if (!item) { alert('Item not found'); return; }
+  const receipt = allData.receipts.find(r => r.receipt_group_id === item.receipt_group_id);
+  if (!receipt) { alert('Receipt not found'); return; }
+
+  $('modalItemId').value         = item.id;
+  $('modalReceiptGroupId').value = item.receipt_group_id;
+  $('modalShop').value           = receipt.shop          !== 'N/A' ? receipt.shop          : '';
+  $('modalBrand').value          = item.brand            !== 'N/A' ? item.brand            : '';
+  $('modalModel').value          = item.model            !== 'N/A' ? item.model            : '';
+  $('modalLocation').value       = item.location         !== 'N/A' ? item.location         : '';
+  $('modalProject').value        = item.project          !== 'N/A' ? item.project          : '';
+  $('modalDocumentation').value  = receipt.documentation !== 'N/A' ? receipt.documentation : '';
+  $('modalUsers').value          = (item.users || []).join(', ');
+
+  const pd = receipt.purchase_date || '';
+  if (pd && pd !== 'N/A') {
+    try { $('modalPurchaseDate').value = new Date(pd.replace(/-/g, ' ')).toISOString().split('T')[0]; }
+    catch { $('modalPurchaseDate').value = ''; }
+  } else { $('modalPurchaseDate').value = ''; }
+
+  $('modalItemsPreview').style.display = 'none';
+  $('ocrModal').style.display = 'flex';
+}
+
+function setupEventListeners() {
+  ['dragenter','dragover','dragleave','drop'].forEach(ev =>
+    window.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false)
+  );
+
+  const dropZone  = $('dropZone');
   const fileInput = $('fileInput');
   if (dropZone && fileInput) {
     const browseLink = qs('.browse-link');
-    if (browseLink) {
-      browseLink.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); fileInput.click(); });
-    }
-    dropZone.addEventListener('click', (e) => { if (!e.target.classList.contains('browse-link')) fileInput.click(); });
-    dropZone.addEventListener('dragover', () => dropZone.classList.add('drag-over'));
+    if (browseLink) browseLink.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); fileInput.click(); });
+    dropZone.addEventListener('click',     e => { if (!e.target.classList.contains('browse-link')) fileInput.click(); });
+    dropZone.addEventListener('dragover',  () => dropZone.classList.add('drag-over'));
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', (e) => {
-      dropZone.classList.remove('drag-over');
-      const f = e.dataTransfer?.files?.[0];
-      if (f) handleFile(f);
-    });
-    fileInput.addEventListener('change', (e) => {
-      const f = e.target.files?.[0];
-      if (f) handleFile(f);
-    });
+    dropZone.addEventListener('drop',      e => { dropZone.classList.remove('drag-over'); const f = e.dataTransfer?.files?.[0]; if (f) handleFile(f); });
+    fileInput.addEventListener('change',   e => { const f = e.target.files?.[0]; if (f) handleFile(f); });
   }
 
-  bind('searchInput', 'input', filterAndRender);
+  bind('searchInput',   'input',  filterAndRender);
   bind('projectFilter', 'change', filterAndRender);
-  bind('statusFilter', 'change', filterAndRender);
-  bind('userFilter', 'change', filterAndRender);
+  bind('statusFilter',  'change', filterAndRender);
+  bind('userFilter',    'change', filterAndRender);
+  bind('refreshBtn',    'click',  () => { loadData(); loadSuggestions(); });
+  bind('exportJsonBtn', 'click',  exportJson);
+  bind('exportCsvBtn',  'click',  exportCsv);
+  bind('importBtn',     'click',  () => $('importInput')?.click());
+  bind('importInput',   'change', handleImport);
+  bind('recheckBtn',    'click',  recheckIntegrity);
+  bind('closeBannerBtn','click',  () => { const b = $('integrityBanner'); if (b) b.style.display = 'none'; });
+  bind('columnToggleBtn','click', () => { const p = $('columnPanel'); if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none'; });
+  bind('closeColumnPanel','click',() => { const p = $('columnPanel'); if (p) p.style.display = 'none'; });
 
-  bind('refreshBtn', 'click', () => { loadData(); loadSuggestions(); });
+  bind('closeModal',  'click',  closeOcrModal);
+  bind('cancelModal', 'click',  closeOcrModal);
+  bind('ocrForm',     'submit', saveOcrData);
 
-  bind('exportJsonBtn', 'click', exportJson);
-  bind('exportCsvBtn', 'click', exportCsv);
+  const modal = $('ocrModal');
+  if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeOcrModal(); });
 
-  bind('importBtn', 'click', () => $('importInput')?.click());
-  bind('importInput', 'change', handleImport);
+  qsa('.col-toggle').forEach(t => t.addEventListener('change', e => {
+    const col = e.target.dataset.column; if (!col) return;
+    if (e.target.checked) visibleColumns.add(col); else visibleColumns.delete(col);
+    updateColumnVisibility();
+  }));
 
-  bind('recheckBtn', 'click', recheckIntegrity);
-  bind('closeBannerBtn', 'click', () => { const b = $('integrityBanner'); if (b) b.style.display = 'none'; });
-
-  bind('columnToggleBtn', 'click', () => {
-    const panel = $('columnPanel');
-    if (!panel) return;
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  });
-  bind('closeColumnPanel', 'click', () => { const panel = $('columnPanel'); if (panel) panel.style.display = 'none'; });
-
-  qsa('.col-toggle').forEach(toggle => {
-    toggle.addEventListener('change', (e) => {
-      const column = e.target.dataset.column;
-      if (!column) return;
-      if (e.target.checked) visibleColumns.add(column);
-      else visibleColumns.delete(column);
-      updateColumnVisibility();
-    });
-  });
-
-  qsa('th.sortable').forEach(th => {
-    th.addEventListener('click', () => {
-      const column = th.dataset.column;
-      if (!column) return;
-      if (currentSort.column === column) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      else { currentSort.column = column; currentSort.direction = 'asc'; }
-      updateSortIndicators();
-      filterAndRender();
-    });
-  });
+  qsa('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.column; if (!col) return;
+    if (currentSort.column === col) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    else { currentSort.column = col; currentSort.direction = 'asc'; }
+    updateSortIndicators(); filterAndRender();
+  }));
 }
 
-// ===================== Init =====================
 document.addEventListener('DOMContentLoaded', () => {
-  loadData();
-  loadSuggestions();
-  setupEventListeners();
+  loadData(); loadSuggestions(); setupEventListeners();
 });
