@@ -1,129 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt & Warranty Manager</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Receipt & Warranty Manager</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
 </head>
+
 <body>
-    <div class="container">
-        <header>
-            <h1>📦 Receipt & Warranty Manager</h1>
-        </header>
+  <div class="container">
+    <header>
+      <h1>📦 Receipt & Warranty Manager</h1>
+    </header>
 
-        <div class="toolbar">
-            <button id="importBtn" class="btn btn-primary">📥 Import JSON</button>
-            <button id="exportJsonBtn" class="btn btn-secondary">📤 Export JSON</button>
-            <button id="exportCsvBtn" class="btn btn-secondary">📊 Export CSV</button>
-            <button id="integrityCheckBtn" class="btn btn-icon" title="Re-check file integrity">🔄</button>
-        </div>
-
-        <div id="integrityBanner" class="banner-error" style="display: none;">
-            <span id="integrityMessage"></span>
-            <button id="recheckBtn" class="btn-small">🔄 Re-check Files Now</button>
-        </div>
-
-        <div class="upload-zone" id="uploadZone">
-            <div class="upload-content">
-                <div class="upload-icon">📄</div>
-Drag & Drop receipt file here or <span class="browse-link" style="color: #2196f3; cursor: pointer; text-decoration: underline;">click to browse</span>                <p class="upload-hint">Supported: PDF, JPG, PNG (max 50MB)</p>
-            </div>
-            <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" hidden>
-        </div>
-
-        <div class="filters">
-            <input type="text" id="searchInput" placeholder="🔍 Search items..." class="search-input">
-            <select id="projectFilter" class="filter-select">
-                <option value="">All Projects</option>
-            </select>
-            <select id="statusFilter" class="filter-select">
-                <option value="">All Status</option>
-                <option value="active">Active</option>
-                <option value="expiring">Expiring Soon (90d)</option>
-                <option value="expired">Expired</option>
-            </select>
-            <select id="userFilter" class="filter-select">
-                <option value="">All Users</option>
-            </select>
-            <button id="columnToggleBtn" class="btn btn-icon" title="Toggle columns">⚙️ Columns</button>
-        </div>
-
-        <div class="table-container">
-            <table id="itemsTable">
-                <thead>
-                    <tr>
-                        <th data-sort="id" class="sortable">ID</th>
-                        <th data-sort="receipt_group_id" class="sortable">Receipt Group</th>
-                        <th data-sort="brand" class="sortable">Brand</th>
-                        <th data-sort="model" class="sortable">Model</th>
-                        <th data-sort="location" class="sortable">Location</th>
-                        <th>Users</th>
-                        <th data-sort="project" class="sortable">Project</th>
-                        <th data-sort="shop" class="sortable">Shop</th>
-                        <th data-sort="purchase_date" class="sortable">Purchase Date</th>
-                        <th>Documentation</th>
-                        <th data-sort="guarantee_end_date" class="sortable">Guarantee End Date</th>
-                        <th>File</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr class="empty-state">
-                        <td colspan="13">
-                            <div class="empty-message">
-                                <span class="empty-icon">📦</span>
-                                <p>No items yet. Upload a receipt to get started!</p>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="status-bar">
-            <span id="itemCount">0 items</span>
-        </div>
+    <div class="toolbar">
+      <button type="button" id="importBtn" class="btn btn-primary">📥 Import JSON</button>
+      <button type="button" id="exportJsonBtn" class="btn btn-secondary">📤 Export JSON</button>
+      <button type="button" id="exportCsvBtn" class="btn btn-secondary">📊 Export CSV</button>
+      <button type="button" id="integrityCheckBtn" class="btn btn-icon" title="Re-check file integrity" aria-label="Re-check file integrity">🔄</button>
     </div>
 
-    <!-- Receipt Information Modal -->
-    <div id="receiptModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Receipt Information</h2>
-                <button class="modal-close" onclick="closeReceiptModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="shopInput">Shop *</label>
-                    <input type="text" id="shopInput" required list="shopList">
-                    <datalist id="shopList"></datalist>
-                </div>
-                <div class="form-group">
-                    <label for="purchaseDateInput">Purchase Date *</label>
-                    <input type="text" id="purchaseDateInput" placeholder="YYYY-MMM-DD" required>
-                    <span class="hint">Format: 2026-Feb-15</span>
-                </div>
-                <div class="form-group">
-                    <label for="documentationInput">Documentation *</label>
-                    <input type="text" id="documentationInput" required list="docList">
-                    <datalist id="docList"></datalist>
-                </div>
-                <div class="form-group">
-                    <label for="quantityInput">Quantity *</label>
-                    <input type="number" id="quantityInput" min="1" value="1" required>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeReceiptModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="submitReceiptInfo()">Next: Item Details</button>
-            </div>
-        </div>
+    <div id="integrityBanner" class="banner-error" style="display: none;" role="status" aria-live="polite">
+      <span id="integrityMessage"></span>
+      <button type="button" id="recheckBtn" class="btn-small">🔄 Re-check Files Now</button>
     </div>
 
-    <!-- Item Details Modal -->
-    <div id="itemModal" class="modal">
-        <div class="m
-    <script src="/static/js/app.js"></script>
+    <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload receipt file">
+      <div class="upload-content">
+        <div class="upload-icon">📄</div>
+        <p>
+          Drag &amp; Drop receipt file here or
+          <span class="browse-link" style="color:#2196f3; cursor:pointer; text-decoration:underline;">click to browse</span>
+        </p>
+        <p class="upload-hint">Supported: PDF, JPG, PNG (max 50MB)</p>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" hidden />
+    </div>
+
+    <div class="filters">
+      <input type="text" id="searchInput" placeholder="🔍 Search items..." class="search-input" aria-label="Search items" />
+      <select id="projectFilter" class="filter-select" aria-label="Filter by project">
+        <option value="">All Projects</option>
+      </select>
+      <select id="statusFilter" class="filter-select" aria-label="Filter by status">
+        <option value="">All Status</option>
+        <option value="active">Active</option>
+        <option value="expiring">Expiring Soon (90d)</option>
+        <option value="expired">Expired</option>
+      </select>
+      <select id="userFilter" class="filter-select" aria-label="Filter by user">
+        <option value="">All Users</option>
+      </select>
+      <button type="button" id="columnToggleBtn" class="btn btn-icon" title="Toggle columns" aria-label="Toggle columns">⚙️ Columns</button>
+    </div>
+
+    <div class="table-container">
+      <table id="itemsTable">
+        <thead>
+          <tr>
+            <th scope="col" data-sort="id" class="sortable">ID</th>
+            <th scope="col" data-sort="receipt_group_id" class="sortable">Receipt Group</th>
+            <th scope="col" data-sort="brand" class="sortable">Brand</th>
+            <th scope="col" data-sort="model" class="sortable">Model</th>
+            <th scope="col" data-sort="location" class="sortable">Location</th>
+            <th scope="col">Users</th>
+            <th scope="col" data-sort="project" class="sortable">Project</th>
+            <th scope="col" data-sort="shop" class="sortable">Shop</th>
+            <th scope="col" data-sort="purchase_date" class="sortable">Purchase Date</th>
+            <th scope="col">Documentation</th>
+            <th scope="col" data-sort="guarantee_end_date" class="sortable">Guarantee End Date</th>
+            <th scope="col">File</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody id="tableBody">
+          <tr class="empty-state">
+            <td colspan="13">
+              <div class="empty-message">
+                <span class="empty-icon">📦</span>
+                <p>No items yet. Upload a receipt to get started!</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="status-bar">
+      <span id="itemCount">0 items</span>
+    </div>
+  </div>
+
+  <!-- Receipt Information Modal -->
+  <div id="receiptModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="receiptModalTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="receiptModalTitle">Receipt Information</h2>
+        <button type="button" class="modal-close" onclick="closeReceiptModal()" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="shopInput">Shop *</label>
+          <input type="text" id="shopInput" required list="shopList" />
+          <datalist id="shopList"></datalist>
+        </div>
+
+        <div class="form-group">
+          <label for="purchaseDateInput">Purchase Date *</label>
+          <input type="date" id="purchaseDateInput" required />
+          <span class="hint">Format: YYYY-MM-DD</span>
+        </div>
+
+        <div class="form-group">
+          <label for="documentationInput">Documentation *</label>
+          <input type="text" id="documentationInput" required list="docList" />
+          <datalist id="docList"></datalist>
+        </div>
+
+        <div class="form-group">
+          <label for="quantityInput">Quantity *</label>
+          <input type="number" id="quantityInput" min="1" value="1" required />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeReceiptModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitReceiptInfo()">Next: Item Details</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Item Details Modal -->
+  <div id="itemModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="itemModalTitle">Item Details</h2>
+        <button type="button" class="modal-close" onclick="closeItemModal()" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="brandInput">Brand *</label>
+          <input type="text" id="brandInput" required />
+        </div>
+
+        <div class="form-group">
+          <label for="modelInput">Model</label>
+          <input type="text" id="modelInput" />
+        </div>
+
+        <div class="form-group">
+          <label for="locationInput">Location</label>
+          <input type="text" id="locationInput" />
+        </div>
+
+        <div class="form-group">
+          <label for="projectInput">Project</label>
+          <input type="text" id="projectInput" list="projectList" />
+          <datalist id="projectList"></datalist>
+        </div>
+
+        <div class="form-group">
+          <label for="usersInput">Users</label>
+          <input type="text" id="usersInput" placeholder="e.g. Alice; Bob" />
+          <span class="hint">Separate multiple users with semicolons.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="guaranteeEndDateInput">Guarantee End Date</label>
+          <input type="date" id="guaranteeEndDateInput" />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeItemModal()">Back</button>
+        <button type="button" class="btn btn-primary" onclick="submitItemDetails()">Save Item</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
 </body>
 </html>
