@@ -1,6 +1,4 @@
-#!/bin/sh
-'''exec' "/Users/vasilis/Library/Mobile Documents/com~apple~CloudDocs/Downloads/receipts manager/venv/bin/python3" "$0" "$@"
-' '''
+#!/Users/vasilis/receipts-manager/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

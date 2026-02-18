@@ -38,15 +38,23 @@ function setupEventListeners() {
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
 
-    dropZone.addEventListener('click', () => fileInput.click());
-    // Add click handler for browse link
+    // Add click handler for browse link FIRST
     const browseLink = document.querySelector('.browse-link');
     if (browseLink) {
         browseLink.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent double-triggering from dropZone click
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Browse link clicked!');
             fileInput.click();
         });
     }
+
+    // Then add dropZone handler, but check if target is browse link
+    dropZone.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('browse-link')) {
+            fileInput.click();
+        }
+    });
 
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -55,13 +63,7 @@ function setupEventListeners() {
     dropZone.addEventListener('dragleave', () => {
         dropZone.classList.remove('drag-over');
     });
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
-        }
-    });
+
 
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
