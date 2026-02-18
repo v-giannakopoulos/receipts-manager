@@ -1,4 +1,5 @@
 #!/bin/bash
+
 cd "$(dirname "$0")"
 
 echo "=========================================="
@@ -25,6 +26,12 @@ echo "Starting built-in HTTP server on http://127.0.0.1:5000 ..."
 echo "Press Ctrl+C in this terminal to stop."
 echo ""
 
+# Activate venv if it exists
+if [ -f "venv/bin/activate" ]; then
+  source venv/bin/activate
+fi
+
+# Run with venv python if available, otherwise python3
 python3 app.py
 status=$?
 

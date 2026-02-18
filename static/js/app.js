@@ -1,320 +1,420 @@
-// Global state
+// ===================== Global state =====================
 let allData = { receipts: [], items: [], next_id: 1, integrity_issues: [] };
 let suggestions = { shops: [], brands: [], models: [], locations: [], documentation: [], projects: [], users: [] };
 let currentSort = { column: 'id', direction: 'asc' };
-let currentFile = null;
-let receiptInfo = {};
-let itemsToCreate = [];
-let currentItemIndex = 0;
-let editingItemId = null;
-let visibleColumns = new Set(['id', 'receipt_group_id', 'brand', 'model', 'location', 'users', 'project', 'shop', 'purchase_date', 'documentation', 'guarantee', 'guarantee_end_date', 'file']);
+let visibleColumns = new Set([
+  'id', 'receipt_group_id', 'brand', 'model', 'location', 'users', 'project',
+  'shop', 'purchase_date', 'documentation', 'guarantee_end_date', 'file'
+]);
 
-// Project colors (for visual differentiation)
-const projectColors = {};
-const colorPalette = [
-    '#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#f44336',
-    '#00bcd4', '#8bc34a', '#ff5722', '#673ab7', '#3f51b5'
-];
+// Backend endpoints
+const API = {
+  data: '/api/data',
+  suggestions: '/api/suggestions',
+  exportJson: '/api/export/json',
+  exportCsv: '/api/export/csv',
+  importJson: '/api/import/json',
+  integrityCheck: '/api/integrity/check',
+  upload: '/api/upload'  // NEW: upload endpoint now exists
+};
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    loadSuggestions();
-    setupEventListeners();
-    setupDateInput();
-});
+// ===================== DOM helpers =====================
+function $(id) { return document.getElementById(id); }
+function qs(sel) { return document.querySelector(sel); }
+function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
 
-// Event Listeners
-function setupEventListeners() {
-    // Drop zone
-        
-    // Prevent default drag behavior on entire window to avoid opening files in browser
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        window.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        }, false);
-    });
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-
-    // Add click handler for browse link FIRST
-    const browseLink = document.querySelector('.browse-link');
-    if (browseLink) {
-        browseLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Browse link clicked!');
-            fileInput.click();
-        });
-    }
-
-    // Then add dropZone handler, but check if target is browse link
-    dropZone.addEventListener('click', (e) => {
-        if (!e.target.classList.contains('browse-link')) {
-            fileInput.click();
-        }
-    });
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('drag-over');
-    });
-
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFile(e.target.files[0]);
-        }
-    });
-
-    // Search and filters
-    document.getElementById('searchInput').addEventListener('input', filterAndRender);
-    document.getElementById('projectFilter').addEventListener('change', filterAndRender);
-    document.getElementById('statusFilter').addEventListener('change', filterAndRender);
-    document.getElementById('userFilter').addEventListener('change', filterAndRender);
-
-    // Buttons
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-        loadData();
-        loadSuggestions();
-    });
-
-    document.getElementById('columnToggleBtn').addEventListener('click', () => {
-        const panel = document.getElementById('columnPanel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-
-    document.getElementById('closeColumnPanel').addEventListener('click', () => {
-        document.getElementById('columnPanel').style.display = 'none';
-    });
-
-    document.getElementById('exportJsonBtn').addEventListener('click', exportJson);
-    document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-
-    document.getElementById('importBtn').addEventListener('click', () => {
-        document.getElementById('importInput').click();
-    });
-
-    document.getElementById('importInput').addEventListener('change', handleImport);
-
-    document.getElementById('recheckBtn').addEventListener('click', recheckIntegrity);
-    document.getElementById('closeBannerBtn').addEventListener('click', () => {
-        document.getElementById('integrityBanner').style.display = 'none';
-    });
-
-    // Column toggles
-    document.querySelectorAll('.col-toggle').forEach(toggle => {
-        toggle.addEventListener('change', (e) => {
-            const column = e.target.dataset.column;
-            if (e.target.checked) {
-                visibleColumns.add(column);
-            } else {
-                visibleColumns.delete(column);
-            }
-            updateColumnVisibility();
-        });
-    });
-
-    // Sort headers
-    document.querySelectorAll('th.sortable').forEach(th => {
-        th.addEventListener('click', () => {
-            const column = th.dataset.column;
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.column = column;
-                currentSort.direction = 'asc';
-            }
-            updateSortIndicators();
-            filterAndRender();
-        });
-    });
-
-    // Tag inputs
-    setupTagInput('userInput', 'userTags', 8);
-    setupTagInput('editUserInput', 'editUserTags', 8);
+function bind(id, event, handler) {
+  const el = $(id);
+  if (!el) { console.warn(`[bind] Missing #${id}`); return; }
+  el.addEventListener(event, handler);
 }
 
-// Date input helper
-function setupDateInput() {
-    const dateInputs = ['receiptDate', 'editDate'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    dateInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-
-        // Set today's date as default in correct format
-        const today = new Date();
-        const formatted = `${today.getFullYear()}-${months[today.getMonth()]}-${String(today.getDate()).padStart(2, '0')}`;
-        input.value = formatted;
-
-        // Auto-format on blur
-        input.addEventListener('blur', () => {
-            let val = input.value.trim();
-            if (!val) return;
-
-            // Try to parse various formats
-            let date;
-            if (val.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-                const parts = val.split('-');
-                date = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
-            } else if (val.match(/^\d{4}\/\d{1,2}\/\d{1,2}$/)) {
-                const parts = val.split('/');
-                date = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
-            } else {
-                return;
-            }
-
-            if (date && !isNaN(date)) {
-                input.value = `${date.getFullYear()}-${months[date.getMonth()]}-${String(date.getDate()).padStart(2, '0')}`;
-            }
-        });
-    });
+async function fetchJson(url, opts) {
+  const resp = await fetch(url, opts);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`${opts?.method || 'GET'} ${url} failed: ${resp.status} ${text}`);
+  }
+  return await resp.json();
 }
 
-// Tag input setup
-function setupTagInput(inputId, containerId, maxTags) {
-    const input = document.getElementById(inputId);
-    const container = document.getElementById(containerId);
-
-    if (!input || !container) return;
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && input.value.trim()) {
-            e.preventDefault();
-            const tags = container.querySelectorAll('.user-tag');
-            if (tags.length >= maxTags) {
-                alert(`Maximum ${maxTags} users allowed`);
-                return;
-            }
-
-            const value = input.value.trim();
-            if (!value) return;
-
-            // Check if already exists
-            const existing = Array.from(tags).some(tag => tag.textContent.replace('×', '').trim() === value);
-            if (existing) {
-                input.value = '';
-                return;
-            }
-
-            const tag = document.createElement('span');
-            tag.className = 'user-tag';
-            tag.innerHTML = `${value} <span class="remove">×</span>`;
-
-            tag.querySelector('.remove').addEventListener('click', () => tag.remove());
-
-            container.insertBefore(tag, input);
-            input.value = '';
-        }
-    });
+// ===================== Downloads (use server endpoints) =====================
+function downloadUrl(url) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
-function getTagValues(containerId) {
-    const container = document.getElementById(containerId);
-    const tags = container.querySelectorAll('.user-tag');
-    return Array.from(tags).map(tag => tag.textContent.replace('×', '').trim());
-}
+function exportJson() { downloadUrl(API.exportJson); }
+function exportCsv() { downloadUrl(API.exportCsv); }
 
-function setTagValues(containerId, values) {
-    const container = document.getElementById(containerId);
-    const input = container.querySelector('input');
-
-    // Clear existing tags
-    container.querySelectorAll('.user-tag').forEach(tag => tag.remove());
-
-    // Add new tags
-    values.forEach(value => {
-        const tag = document.createElement('span');
-        tag.className = 'user-tag';
-        tag.innerHTML = `${value} <span class="remove">×</span>`;
-        tag.querySelector('.remove').addEventListener('click', () => tag.remove());
-        container.insertBefore(tag, input);
-    });
-}
-
-// Data loading
+// ===================== Data loading =====================
 async function loadData() {
-    try {
-        const response = await fetch('/api/data');
-        allData = await response.json();
+  try {
+    allData = await fetchJson(API.data);
 
-        // Show integrity banner if issues exist
-        if (allData.integrity_issues && allData.integrity_issues.length > 0) {
-            document.getElementById('integrityBanner').style.display = 'block';
-        } else {
-            document.getElementById('integrityBanner').style.display = 'none';
-        }
-
-        filterAndRender();
-    } catch (error) {
-        console.error('Error loading data:', error);
-        alert('Error loading data');
+    const banner = $('integrityBanner');
+    if (banner) {
+      const issues = allData.integrity_issues || [];
+      banner.style.display = issues.length > 0 ? 'block' : 'none';
+      if ($('integrityMessage')) $('integrityMessage').textContent =
+        issues.length > 0 ? `${issues.length} integrity issue(s) detected.` : '';
     }
+
+    filterAndRender();
+  } catch (err) {
+    console.error('Error loading data:', err);
+    alert('Error loading data (see Console).');
+  }
 }
 
 async function loadSuggestions() {
-    try {
-        const response = await fetch('/api/suggestions');
-        suggestions = await response.json();
-        populateDataLists();
-        populateFilterDropdowns();
-    } catch (error) {
-        console.error('Error loading suggestions:', error);
-    }
+  try {
+    suggestions = await fetchJson(API.suggestions);
+    populateDataLists();
+    populateFilterDropdowns();
+  } catch (err) {
+    console.error('Error loading suggestions:', err);
+  }
 }
 
 function populateDataLists() {
-    // Shop
-    const shopList = document.getElementById('shopList');
-    shopList.innerHTML = suggestions.shops.map(s => `<option value="${s}">`).join('');
+  const set = (id, arr) => {
+    const el = $(id);
+    if (!el) return;
+    const safe = Array.isArray(arr) ? arr : [];
+    el.innerHTML = safe.map(s => `<option value="${String(s).replace(/"/g, '&quot;')}">`).join('');
+  };
 
-    // Brand
-    const brandList = document.getElementById('brandList');
-    brandList.innerHTML = suggestions.brands.map(s => `<option value="${s}">`).join('');
-
-    // Model
-    const modelList = document.getElementById('modelList');
-    modelList.innerHTML = suggestions.models.map(s => `<option value="${s}">`).join('');
-
-    // Location
-    const locationList = document.getElementById('locationList');
-    locationList.innerHTML = suggestions.locations.map(s => `<option value="${s}">`).join('');
-
-    // Documentation
-    const docList = document.getElementById('docList');
-    docList.innerHTML = suggestions.documentation.map(s => `<option value="${s}">`).join('');
-
-    // Project
-    const projectList = document.getElementById('projectList');
-    projectList.innerHTML = suggestions.projects.map(s => `<option value="${s}">`).join('');
-
-    // Users
-    const userList = document.getElementById('userList');
-    userList.innerHTML = suggestions.users.map(s => `<option value="${s}">`).join('');
+  set('shopList', suggestions.shops);
+  set('brandList', suggestions.brands);
+  set('modelList', suggestions.models);
+  set('locationList', suggestions.locations);
+  set('docList', suggestions.documentation);
+  set('projectList', suggestions.projects);
+  set('userList', suggestions.users);
 }
 
 function populateFilterDropdowns() {
-    // Projects
-    const projectFilter = document.getElementById('projectFilter');
-    const currentProject = projectFilter.value;
-    projectFilter.innerHTML = '<option value="">All Projects</option>';
-    suggestions.projects.forEach(p => {
-        projectFilter.innerHTML += `<option value="${p}">${p}</option>`;
-    });
-    projectFilter.value = currentProject;
+  const projectFilter = $('projectFilter');
+  if (projectFilter) {
+    const current = projectFilter.value;
+    projectFilter.innerHTML = '<option value="">All Projects</option>' +
+      (Array.isArray(suggestions.projects) ? suggestions.projects : [])
+        .map(p => `<option value="${String(p).replace(/"/g, '&quot;')}">${p}</option>`).join('');
+    projectFilter.value = current;
+  }
 
-    // Users
-    const userFilter = document.getElementById('userFilter');
-    const currentUser = userFilter.value;
-    userFilter.innerHTML = '<option value="">All Users</option>';
-    suggestions.users.forEach(u => {
-        userFilter.innerHTML += `<option value="${u}">${u}</option>`;
-    });
-    userFilter.value = currentUser;
+  const userFilter = $('userFilter');
+  if (userFilter) {
+    const current = userFilter.value;
+    userFilter.innerHTML = '<option value="">All Users</option>' +
+      (Array.isArray(suggestions.users) ? suggestions.users : [])
+        .map(u => `<option value="${String(u).replace(/"/g, '&quot;')}">${u}</option>`).join('');
+    userFilter.value = current;
+  }
 }
+
+// ===================== Table join + render =====================
+function receiptMap() {
+  const map = new Map();
+  (allData.receipts || []).forEach(r => map.set(r.receipt_group_id, r));
+  return map;
+}
+
+function normalizeUsers(u) {
+  if (Array.isArray(u)) return u;
+  return String(u || '').split(';').map(s => s.trim()).filter(Boolean);
+}
+
+function getStatus(item) {
+  const end = item?.guarantee_end_date;
+  if (!end || end === 'N/A') return 'active';
+  const d = new Date(String(end).replace(/-/g, '/'));
+  if (isNaN(d)) return 'active';
+  const now = new Date();
+  const diffDays = Math.floor((d - now) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 'expired';
+  if (diffDays <= 90) return 'expiring';
+  return 'active';
+}
+
+function applyFilters(rows) {
+  const q = ($('searchInput')?.value || '').trim().toLowerCase();
+  const project = $('projectFilter')?.value || '';
+  const status = $('statusFilter')?.value || '';
+  const user = $('userFilter')?.value || '';
+
+  return (rows || []).filter(r => {
+    if (project && String(r.project || '') !== project) return false;
+    if (status && getStatus(r) !== status) return false;
+    if (user && !normalizeUsers(r.users).includes(user)) return false;
+
+    if (q) {
+      const hay = [
+        r.id, r.receipt_group_id, r.brand, r.model, r.location, r.project,
+        r.shop, r.purchase_date, r.documentation, r.guarantee_end_date,
+        normalizeUsers(r.users).join('; '), r.file
+      ].map(x => String(x || '').toLowerCase()).join(' | ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sortRows(rows) {
+  const col = currentSort.column;
+  const dir = currentSort.direction === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => String(a?.[col] ?? '').localeCompare(String(b?.[col] ?? '')) * dir);
+}
+
+function buildRows() {
+  const rmap = receiptMap();
+  return (allData.items || []).map(it => {
+    const r = rmap.get(it.receipt_group_id) || {};
+    return {
+      id: it.id,
+      receipt_group_id: it.receipt_group_id,
+      brand: it.brand || '',
+      model: it.model || '',
+      location: it.location || '',
+      users: it.users || [],
+      project: it.project || '',
+      shop: r.shop || '',
+      purchase_date: r.purchase_date || '',
+      documentation: r.documentation || '',
+      guarantee_end_date: it.guarantee_end_date || '',
+      file: r.receipt_filename || it.receipt_relative_path || ''
+    };
+  });
+}
+
+function renderTable(rows) {
+  const tbody = $('tableBody');
+  if (!tbody) return;
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `
+      <tr class="empty-state">
+        <td colspan="14">
+          <div class="empty-message">
+            <span class="empty-icon">📦</span>
+            <p>No items yet. Upload a receipt to get started!</p>
+          </div>
+        </td>
+      </tr>`;
+    $('itemCount') && ($('itemCount').textContent = '0 items');
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td data-column="id">${r.id ?? ''}</td>
+      <td data-column="receipt_group_id">${r.receipt_group_id ?? ''}</td>
+      <td data-column="brand">${r.brand ?? ''}</td>
+      <td data-column="model">${r.model ?? ''}</td>
+      <td data-column="location">${r.location ?? ''}</td>
+      <td data-column="users">${normalizeUsers(r.users).join('; ')}</td>
+      <td data-column="project">${r.project ?? ''}</td>
+      <td data-column="shop">${r.shop ?? ''}</td>
+      <td data-column="purchase_date">${r.purchase_date ?? ''}</td>
+      <td data-column="documentation">${r.documentation ?? ''}</td>
+      <td data-column="guarantee_end_date">${r.guarantee_end_date ?? ''}</td>
+      <td data-column="file">${r.file ?? ''}</td>
+      <td data-column="actions"><button type="button" class="btn-small" disabled>Edit</button></td>
+    </tr>
+  `).join('');
+
+  $('itemCount') && ($('itemCount').textContent = `${rows.length} items`);
+  updateColumnVisibility();
+}
+
+function updateColumnVisibility() {
+  qsa('th[data-column]').forEach(th => {
+    const c = th.dataset.column;
+    th.style.display = visibleColumns.has(c) ? '' : 'none';
+  });
+  qsa('#itemsTable td[data-column]').forEach(td => {
+    const c = td.dataset.column;
+    td.style.display = visibleColumns.has(c) ? '' : 'none';
+  });
+}
+
+function updateSortIndicators() {
+  qsa('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.column === currentSort.column) {
+      th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+}
+
+function filterAndRender() {
+  const rows = buildRows();
+  const filtered = applyFilters(rows);
+  const sorted = sortRows(filtered);
+  renderTable(sorted);
+}
+
+// ===================== Import + integrity =====================
+async function handleImport(e) {
+  const f = e?.target?.files?.[0];
+  if (!f) return;
+
+  try {
+    const text = await f.text();
+    const payload = JSON.parse(text);
+    await fetchJson(API.importJson, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await loadData();
+    await loadSuggestions();
+    alert('Imported successfully.');
+  } catch (err) {
+    console.error('Import failed:', err);
+    alert('Import failed (see Console).');
+  } finally {
+    e.target.value = '';
+  }
+}
+
+async function recheckIntegrity() {
+  try {
+    await fetchJson(API.integrityCheck, { method: 'POST' });
+    await loadData();
+  } catch (err) {
+    console.error('Integrity check failed:', err);
+    await loadData();
+  }
+}
+
+// ===================== File upload (NOW WORKING) =====================
+async function handleFile(file) {
+  if (!file) return;
+
+  try {
+    // Validate file type
+    const okTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (file.type && !okTypes.includes(file.type)) {
+      alert('Unsupported file type. Please upload PDF, JPG, or PNG.');
+      return;
+    }
+
+    // Validate file size (50MB max)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('File too large. Maximum size is 50MB.');
+      return;
+    }
+
+    // Upload via multipart/form-data
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch(API.upload, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`Upload failed: ${resp.status} ${text}`);
+    }
+
+    const result = await resp.json();
+    console.log('Upload success:', result);
+
+    // Reload data to show new item
+    await loadData();
+    await loadSuggestions();
+
+    alert(`File uploaded successfully!\n\nReceipt Group: ${result.receipt_group_id}\nItem ID: ${result.item_id}`);
+  } catch (err) {
+    console.error('Upload error:', err);
+    alert(`Upload failed: ${err.message}`);
+  }
+}
+
+// ===================== Event listeners =====================
+function setupEventListeners() {
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    window.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+  });
+
+  const dropZone = $('dropZone');
+  const fileInput = $('fileInput');
+  if (dropZone && fileInput) {
+    const browseLink = qs('.browse-link');
+    if (browseLink) {
+      browseLink.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); fileInput.click(); });
+    }
+    dropZone.addEventListener('click', (e) => { if (!e.target.classList.contains('browse-link')) fileInput.click(); });
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+      dropZone.classList.remove('drag-over');
+      const f = e.dataTransfer?.files?.[0];
+      if (f) handleFile(f);
+    });
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files?.[0];
+      if (f) handleFile(f);
+    });
+  }
+
+  bind('searchInput', 'input', filterAndRender);
+  bind('projectFilter', 'change', filterAndRender);
+  bind('statusFilter', 'change', filterAndRender);
+  bind('userFilter', 'change', filterAndRender);
+
+  bind('refreshBtn', 'click', () => { loadData(); loadSuggestions(); });
+
+  bind('exportJsonBtn', 'click', exportJson);
+  bind('exportCsvBtn', 'click', exportCsv);
+
+  bind('importBtn', 'click', () => $('importInput')?.click());
+  bind('importInput', 'change', handleImport);
+
+  bind('recheckBtn', 'click', recheckIntegrity);
+  bind('closeBannerBtn', 'click', () => { const b = $('integrityBanner'); if (b) b.style.display = 'none'; });
+
+  bind('columnToggleBtn', 'click', () => {
+    const panel = $('columnPanel');
+    if (!panel) return;
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  });
+  bind('closeColumnPanel', 'click', () => { const panel = $('columnPanel'); if (panel) panel.style.display = 'none'; });
+
+  qsa('.col-toggle').forEach(toggle => {
+    toggle.addEventListener('change', (e) => {
+      const column = e.target.dataset.column;
+      if (!column) return;
+      if (e.target.checked) visibleColumns.add(column);
+      else visibleColumns.delete(column);
+      updateColumnVisibility();
+    });
+  });
+
+  qsa('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const column = th.dataset.column;
+      if (!column) return;
+      if (currentSort.column === column) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      else { currentSort.column = column; currentSort.direction = 'asc'; }
+      updateSortIndicators();
+      filterAndRender();
+    });
+  });
+}
+
+// ===================== Init =====================
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  loadSuggestions();
+  setupEventListeners();
+});

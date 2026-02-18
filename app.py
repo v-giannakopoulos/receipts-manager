@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Receipt & Warranty Manager (standalone, no Flask)
-Fixed static file serving
+Fixed static file serving + upload endpoint
 """
 
 import json
@@ -201,6 +201,59 @@ def integrity_worker():
             pass
 
 
+def _parse_multipart_file(body: bytes, content_type: str, field_name: str = "file"):
+    """
+    Minimal multipart/form-data parser for a single file field.
+    Returns: (filename, file_bytes, part_content_type) or (None, None, None)
+    """
+    if not content_type or "multipart/form-data" not in content_type:
+        return None, None, None
+
+    m = re.search(r"boundary=([^;]+)", content_type)
+    if not m:
+        return None, None, None
+
+    boundary = m.group(1).strip().strip('"')
+    b_boundary = ("--" + boundary).encode("utf-8")
+
+    # Split into parts; body format uses CRLF and boundary separators
+    parts = body.split(b_boundary)
+    for part in parts:
+        part = part.strip()
+        if not part or part == b"--":
+            continue
+
+        # Each part: headers \r\n\r\n content \r\n
+        if b"\r\n\r\n" not in part:
+            continue
+        raw_headers, raw_content = part.split(b"\r\n\r\n", 1)
+
+        # Remove trailing CRLF and possible closing markers
+        raw_content = raw_content.rstrip(b"\r\n")
+        header_lines = raw_headers.decode("utf-8", errors="replace").split("\r\n")
+        headers = {}
+        for line in header_lines:
+            if ":" in line:
+                k, v = line.split(":", 1)
+                headers[k.strip().lower()] = v.strip()
+
+        disp = headers.get("content-disposition", "")
+        # Expect: form-data; name="file"; filename="something.ext"
+        if "form-data" not in disp or f'name="{field_name}"' not in disp:
+            continue
+
+        fn_m = re.search(r'filename="([^"]+)"', disp)
+        filename = fn_m.group(1) if fn_m else "upload.bin"
+        part_ctype = headers.get("content-type", "application/octet-stream")
+        return filename, raw_content, part_ctype
+
+    return None, None, None
+
+
+def _today_ymmmdd():
+    return datetime.now().strftime("%Y-%b-%d")
+
+
 # ---------- HTTP handler ----------
 
 class Handler(BaseHTTPRequestHandler):
@@ -380,6 +433,84 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        # NEW: File upload endpoint
+        if path == "/api/upload":
+            # Limit: 50MB
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            max_len = 50 * 1024 * 1024
+            if length <= 0 or length > max_len:
+                self._set_headers(400)
+                self.wfile.write(b'{"success":false,"error":"Invalid or too large upload"}')
+                return
+
+            body = self.rfile.read(length)
+            ctype = self.headers.get("Content-Type", "")
+
+            filename, file_bytes, part_type = _parse_multipart_file(body, ctype, field_name="file")
+            if not file_bytes:
+                self._set_headers(400)
+                self.wfile.write(b'{"success":false,"error":"No file field found"}')
+                return
+
+            # Save uploaded file under _Receipts/uploads/
+            ext = Path(filename).suffix.lower() or ".bin"
+            safe_base = sanitize_filename(Path(filename).stem, max_length=80)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            upload_dir = RECEIPTS_DIR / "uploads"
+            upload_dir.mkdir(exist_ok=True)
+            saved_name = f"{ts}_{safe_base}{ext}"
+            saved_path = upload_dir / saved_name
+            saved_path.write_bytes(file_bytes)
+
+            rel_path = str(saved_path.relative_to(BASE_DIR))
+
+            # Create a placeholder receipt + one placeholder item
+            with data_lock:
+                data = load_data()
+
+                # New receipt group id
+                rgid = generate_receipt_group_id(data)
+
+                receipt = {
+                    "receipt_group_id": rgid,
+                    "shop": "N/A",
+                    "purchase_date": _today_ymmmdd(),
+                    "documentation": "N/A",
+                    "receipt_filename": saved_name,
+                    "receipt_relative_path": rel_path,
+                }
+                data.setdefault("receipts", []).append(receipt)
+
+                item_id = int(data.get("next_id", 1))
+                item = {
+                    "id": item_id,
+                    "receipt_group_id": rgid,
+                    "brand": "N/A",
+                    "model": "N/A",
+                    "location": "N/A",
+                    "users": [],
+                    "project": "N/A",
+                    "guarantee_duration": 0,
+                    "guarantee_unit": "days",
+                    "guarantee_end_date": "N/A",
+                    "receipt_relative_path": rel_path,
+                }
+                data.setdefault("items", []).append(item)
+                data["next_id"] = item_id + 1
+
+                save_data(data)
+
+            self._set_headers(200)
+            self.wfile.write(json.dumps({
+                "success": True,
+                "receipt_group_id": rgid,
+                "item_id": item_id,
+                "receipt_filename": saved_name,
+                "receipt_relative_path": rel_path,
+                "content_type": part_type,
+            }).encode("utf-8"))
+            return
 
         if path == "/api/integrity/check":
             with data_lock:
