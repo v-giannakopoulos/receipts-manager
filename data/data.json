@@ -1,29 +1,6 @@
 {
-  "receipts": [
-    {
-      "receipt_group_id": "RG-0001",
-      "shop": "N/A",
-      "purchase_date": "2026-Feb-18",
-      "documentation": "N/A",
-      "receipt_filename": "20260218_153733_Apple-AirPods-Pro-3-46023-Invoice.pdf",
-      "receipt_relative_path": "_Receipts/uploads/20260218_153733_Apple-AirPods-Pro-3-46023-Invoice.pdf"
-    }
-  ],
-  "items": [
-    {
-      "id": 1,
-      "receipt_group_id": "RG-0001",
-      "brand": "N/A",
-      "model": "N/A",
-      "location": "N/A",
-      "users": [],
-      "project": "N/A",
-      "guarantee_duration": 0,
-      "guarantee_unit": "days",
-      "guarantee_end_date": "N/A",
-      "receipt_relative_path": "_Receipts/uploads/20260218_153733_Apple-AirPods-Pro-3-46023-Invoice.pdf"
-    }
-  ],
-  "next_id": 2,
+  "receipts": [],
+  "items": [],
+  "next_id": 1,
   "integrity_issues": []
 }
