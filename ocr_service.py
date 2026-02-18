@@ -379,3 +379,52 @@ def extract_receipt_data(image_path: str, engine: str = "easyocr",
         Dictionary with extracted receipt data
     """
     
+def extract_receipt_data(image_path: str, engine: str = "easyocr", 
+                        languages: List[str] = None) -> Dict[str, any]:
+    """
+    Convenience function to extract receipt data from image or PDF.
+    
+    Args:
+        image_path: Path to receipt image or PDF
+        engine: OCR engine to use
+        languages: List of language codes
+    
+    Returns:
+        Dictionary with extracted receipt data
+    """
+    service = create_ocr_service(engine=engine, languages=languages)
+    return service.parse_receipt(image_path)
+
+
+if __name__ == "__main__":
+    # Test the OCR service
+    import sys
+    
+    if len(sys.argv) < 2:
+        print("Usage: python ocr_service.py <image_path> [engine]")
+        print("  engine: easyocr (default) or tesseract")
+        sys.exit(1)
+    
+    image_path = sys.argv[1]
+    engine = sys.argv[2] if len(sys.argv) > 2 else "easyocr"
+    
+    print(f"Processing receipt with {engine}...")
+    print("-" * 60)
+    
+    try:
+        data = extract_receipt_data(image_path, engine=engine, languages=['en', 'nl'])
+        
+        print(f"\nShop: {data['shop']}")
+        print(f"Date: {data['purchase_date']}")
+        print(f"Total: €{data['total_amount']}" if data['total_amount'] else "Total: Not found")
+        print(f"\nItems found: {len(data['items'])}")
+        for item in data['items']:
+            print(f"  - {item['name']}: €{item['price']}")
+        
+        print("\n" + "-" * 60)
+        print("Raw extracted text:")
+        print(data['raw_text'])
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
