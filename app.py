@@ -4,6 +4,7 @@ Receipt & Warranty Manager (standalone, no Flask)
 Fixed static file serving + OCR integration
 """
 import json
+import os
 import shutil
 import re
 import threading
@@ -755,14 +756,17 @@ def main():
         print("The app will work but look unstyled.")
         print()
 
-    print("🚀 Server on http://127.0.0.1:5000")
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "5000"))
+
+    print(f"🚀 Server on http://{host}:{port}")
     print("Press Ctrl+C to stop")
     print()
 
     t = threading.Thread(target=integrity_worker, daemon=True)
     t.start()
 
-    server = HTTPServer(("127.0.0.1", 5000), Handler)
+    server = HTTPServer((host, port), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

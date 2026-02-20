@@ -1,0 +1,33 @@
+# Version control
+.git/
+.gitignore
+
+# Python environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node / Electron (not needed in Docker)
+node_modules/
+dist/
+out/
+electron-main.js
+package.json
+package-lock.json
+setup-vendor.sh
+vendor/
+
+# macOS-specific launchers
+run.command
+run.sh
+
+# User data (mounted as volumes at runtime)
+storage/
+data/database/
+data/backups/
+
+# Misc
+.DS_Store
+*.log
+README.md
