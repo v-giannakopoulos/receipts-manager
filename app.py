@@ -18,13 +18,15 @@ from ocr_service import extract_receipt_data
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
-RECEIPTS_DIR = BASE_DIR / "_Receipts"
+DATABASE_DIR = DATA_DIR / "database"
+STORAGE_DIR = BASE_DIR / "storage"
+RECEIPTS_DIR = STORAGE_DIR / "_Receipts"
 BACKUP_DIR = DATA_DIR / "backups"
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
-DATA_FILE = DATA_DIR / "data.json"
+DATA_FILE = DATABASE_DIR / "data.json"
 
-for d in (DATA_DIR, RECEIPTS_DIR, BACKUP_DIR):
+for d in (DATA_DIR, DATABASE_DIR, STORAGE_DIR, RECEIPTS_DIR, BACKUP_DIR):
     d.mkdir(exist_ok=True)
 
 data_lock = threading.Lock()
@@ -182,8 +184,8 @@ def build_multi_item_filename(receipt, ext):
 
 def get_storage_directory(item):
     if item["project"] and item["project"] != "N/A":
-        return BASE_DIR / sanitize_filename(item["project"], 50)
-    return BASE_DIR / sanitize_filename(item["brand"], 50)
+        return STORAGE_DIR / sanitize_filename(item["project"], 50)
+    return STORAGE_DIR / sanitize_filename(item["brand"], 50)
 
 def verify_file_integrity(data):
     issues = []
@@ -378,8 +380,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(csv_data.encode("utf-8"))
             return
 
-        # ── Serve a stored receipt / warranty file ──────────────────────────
-        # Usage: GET /api/file?path=_Receipts/uploads/somefile.pdf
+        # ── Serve a stored receipt / warranty file ────────────────────────────────────
+        # Usage: GET /api/file?path=storage/_Receipts/uploads/somefile.pdf
         if path == "/api/file":
             qs_params = parse_qs(parsed.query)
             rel = qs_params.get("path", [None])[0]
@@ -658,7 +660,7 @@ class Handler(BaseHTTPRequestHandler):
                     try:
                         if new_path != old_path:
                             shutil.move(str(old_path), str(new_path))
-                        rel = f"{new_dir.name}/{new_name}"
+                        rel = str(new_path.relative_to(BASE_DIR))
                         receipt["receipt_filename"] = new_name
                         receipt["receipt_relative_path"] = rel
                         item["receipt_relative_path"] = rel
