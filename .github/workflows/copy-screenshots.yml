@@ -1,0 +1,41 @@
+name: Copy Screenshots to Main
+
+on:
+  workflow_dispatch:
+
+jobs:
+  copy-screenshots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create branch and copy screenshots
+        run: |
+          git checkout main
+          git checkout -b add-screenshots-to-main
+          git checkout MacOS-app -- screenshots/
+          git add screenshots/
+          git commit -m "Add screenshots from MacOS-app branch"
+          git push origin add-screenshots-to-main
+
+      - name: Create Pull Request
+        run: |
+          gh pr create \
+            --title "Add screenshots to main" \
+            --body "Copying screenshots folder from MacOS-app branch to main" \
+            --base main \
+            --head add-screenshots-to-main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
