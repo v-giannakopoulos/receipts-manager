@@ -34,3 +34,5 @@ _Receipts/*
 
 # Logs
 *.log
+vendor/
+node_modules/

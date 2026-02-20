@@ -1,46 +1,37 @@
 {
-  "name": "receipt-manager",
+  "name": "receipt-warranty-manager",
   "version": "1.0.0",
   "description": "Receipt & Warranty Manager",
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --arm64",
-    "build-dmg": "electron-builder --mac --arm64 --dir"
+    "build": "electron-builder --mac --arm64"
   },
-  "author": "Your Name",
-  "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "com.yourname.receiptmanager",
+    "appId": "eu.savagi.receipts-manager",
     "productName": "Receipt Manager",
     "mac": {
       "category": "public.app-category.productivity",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": ["arm64"]
-        }
-      ],
-      "icon": "build/icon.icns"
+      "target": [{ "target": "dmg", "arch": ["arm64"] }]
     },
     "files": [
       "electron-main.js",
-      "frontend/**/*",
-      "backend/**",
-      "!backend/**/__pycache__",
-      "!backend/**/*.pyc"
+      "app.py",
+      "ocr_service.py",
+      "templates/**",
+      "static/**",
+      "data/**",
+      "_Receipts/**",
+      "venv/**",
+      "requirements.txt"
     ],
     "extraResources": [
-      {
-        "from": "backend",
-        "to": "backend",
-        "filter": ["**/*", "!**/__pycache__", "!**/*.pyc"]
-      }
+      { "from": "_Receipts", "to": "_Receipts" },
+      { "from": "data",      "to": "data"      }
     ]
   }
 }
-
