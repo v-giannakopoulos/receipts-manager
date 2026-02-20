@@ -2,14 +2,37 @@ const { app, BrowserWindow, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 
 let flaskProcess = null;
 let mainWindow   = null;
 
+// ── Find Python (try multiple locations) ──────────────────────────────────
+function findPython() {
+  const possiblePaths = [
+    '/usr/local/bin/python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/bin/python3',
+    'python3'
+  ];
+  
+  for (const pyPath of possiblePaths) {
+    if (pyPath === 'python3' || fs.existsSync(pyPath)) {
+      return pyPath;
+    }
+  }
+  
+  console.error('Could not find Python3! Please install Python 3.');
+  return 'python3'; // fallback
+}
+
 // ── Start the Python/Flask server ──────────────────────────────────────────
 function startFlask() {
-  const pythonPath = path.join(__dirname, 'venv', 'bin', 'python3');
+  const pythonPath = findPython();
   const appPath    = path.join(__dirname, 'app.py');
+
+  console.log('[Flask] Starting with Python:', pythonPath);
+  console.log('[Flask] App path:', appPath);
 
   flaskProcess = spawn(pythonPath, [appPath], {
     cwd: __dirname,
@@ -25,7 +48,11 @@ function startFlask() {
 function waitForFlask(url, retries, callback) {
   http.get(url, () => callback())
       .on('error', () => {
-        if (retries <= 0) { console.error('Flask never started!'); return; }
+        if (retries <= 0) { 
+          console.error('Flask never started! Check if Python and dependencies are installed.');
+          console.error('Try running: pip3 install -r requirements.txt');
+          return; 
+        }
         setTimeout(() => waitForFlask(url, retries - 1, callback), 500);
       });
 }
@@ -49,7 +76,9 @@ function createWindow() {
   });
 
   // Wait up to 30 seconds for Flask, then load
+  console.log('[Electron] Waiting for Flask to start...');
   waitForFlask('http://127.0.0.1:5000', 60, () => {
+    console.log('[Electron] Flask is ready! Loading window...');
     mainWindow.loadURL('http://127.0.0.1:5000');
   });
 
