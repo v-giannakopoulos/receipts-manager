@@ -16,9 +16,10 @@
     "productName": "Receipt Manager",
     "mac": {
       "category": "public.app-category.productivity",
+      "identity": null,
       "target": [
         {
-          "target": "dmg",
+          "target": "dir",
           "arch": [
             "arm64"
           ]
@@ -32,14 +33,14 @@
       "templates/**",
       "static/**",
       "data/**",
-      "_Receipts/**",
+      "storage/**",
       "venv/**",
       "requirements.txt"
     ],
     "extraResources": [
       {
-        "from": "_Receipts",
-        "to": "_Receipts"
+        "from": "storage",
+        "to": "storage"
       },
       {
         "from": "data",
