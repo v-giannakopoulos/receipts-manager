@@ -16,8 +16,8 @@ Available as a **native macOS app** (Apple Silicon) or as a **self-hosted web ap
 - Python, Flask, and all dependencies are bundled — nothing to install
 - PDF OCR support included (poppler bundled)
 
-> **First launch**: macOS will warn the app is unsigned.  
-> Right-click → **Open** → **Open anyway** to proceed.
+> ⚠️ **Important — First Launch**  
+> Because this app is not signed with an Apple Developer certificate, macOS may show a **"damaged and can't be opened"** warning. This is a false alarm — the app is safe. See the [First Launch fix](#-app-shows-damaged-and-cant-be-opened) in Troubleshooting below.
 
 ---
 
@@ -53,8 +53,12 @@ Available as a **native macOS app** (Apple Silicon) or as a **self-hosted web ap
 
 1. [Download the DMG](https://github.com/SaVaGi-eu/receipts-manager/releases/latest)
 2. Open the DMG and drag **Receipt Manager** to your Applications folder
-3. Right-click → **Open** → **Open anyway** (first launch only)
-4. The app starts automatically — no browser needed
+3. **Before opening**: run the quarantine fix (see below) — macOS will otherwise block the app
+4. Open Terminal (`Cmd + Space` → type `Terminal` → Enter) and run:
+   ```bash
+   xattr -cr /Applications/Receipt\ Manager.app
+   ```
+5. Double-click the app — it will open normally from now on
 
 ### Option B — Web App (macOS, Linux, Windows)
 
@@ -70,15 +74,7 @@ Available as a **native macOS app** (Apple Silicon) or as a **self-hosted web ap
 
 #### Quick Start
 
-**Mac:**
-```bash
-git clone https://github.com/SaVaGi-eu/receipts-manager.git
-cd receipts-manager
-./run.sh
-```
-Then open your browser to `http://127.0.0.1:5000`
-
-**Linux:**
+**Mac / Linux:**
 ```bash
 git clone https://github.com/SaVaGi-eu/receipts-manager.git
 cd receipts-manager
@@ -315,11 +311,21 @@ receipts-manager/
 
 ## Troubleshooting
 
-### macOS App won't open
-macOS blocks unsigned apps by default. Fix:
-1. Right-click the app → **Open**
-2. Click **Open anyway** in the dialog
-3. You only need to do this once
+### 🚨 App shows "damaged and can't be opened"
+
+This is the most common issue and affects **all users on first install**. It is **not** a real problem with the app — macOS adds a quarantine flag to every file downloaded from the internet, and applies this aggressive warning to unsigned apps.
+
+**Fix — open Terminal and run:**
+```bash
+xattr -cr /Applications/Receipt\ Manager.app
+```
+
+Alternatively, drag the app icon directly into the Terminal window after typing `xattr -cr ` (with a trailing space).
+
+You only need to do this **once**. The app will open normally from then on.
+
+> **Why does this happen to this app but not others?**  
+> Apps distributed via the Mac App Store or signed with an Apple Developer ID certificate ($99/year) are automatically trusted by macOS Gatekeeper. This app is open-source and unsigned, so macOS treats it with maximum suspicion. The `xattr -cr` command simply removes the quarantine flag macOS attached to the file.
 
 ### "Python 3 is not installed"
 - **Mac**: `brew install python` or [python.org](https://www.python.org/downloads/)
@@ -341,7 +347,7 @@ Port 5000 is taken. Either stop the other app, or change the port in `app.py`.
 chmod +x run.sh run.command setup-vendor.sh
 ```
 
-### App won't start
+### App won't start (web version)
 1. Check Python version: `python3 --version` (must be 3.8+)
 2. Delete `venv/` and restart (forces fresh install)
 3. Check terminal for error messages
