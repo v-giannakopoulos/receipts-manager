@@ -4,24 +4,596 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Receipt & Warranty Manager</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    /* ===== CSS Variables ===== */
+    :root {
+      --primary-color: #4CAF50;
+      --primary-dark: #45a049;
+      --secondary-color: #2196F3;
+      --danger-color: #f44336;
+      --warning-color: #ff9800;
+      --text-color: #333;
+      --bg-color: #f5f5f5;
+      --card-bg: #ffffff;
+      --border-color: #ddd;
+      --shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.6;
+    }
+
+    /* ===== Header ===== */
+    .app-header {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      color: white;
+      padding: 1.5rem 2rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .language-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255,255,255,0.2);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+    }
+
+    .language-selector label {
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .language-selector select {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 6px;
+      background: white;
+      color: var(--text-color);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .language-selector select:hover {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+    }
+
+    .item-count {
+      font-size: 1.1rem;
+      background: rgba(255,255,255,0.2);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    /* ===== Main Content ===== */
+    .app-main {
+      max-width: 1400px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    /* ===== Banner ===== */
+    .integrity-banner {
+      display: none;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .banner-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .banner-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: var(--text-color);
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+
+    .banner-close:hover {
+      opacity: 1;
+    }
+
+    /* ===== Upload Section ===== */
+    .upload-section {
+      margin-bottom: 2rem;
+    }
+
+    .drop-zone {
+      background: var(--card-bg);
+      border: 3px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--primary-color);
+      background: rgba(76, 175, 80, 0.05);
+      transform: translateY(-2px);
+    }
+
+    .drop-zone-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .drop-icon {
+      font-size: 3rem;
+    }
+
+    .browse-link {
+      color: var(--primary-color);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .drop-hint {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    /* ===== Toolbar ===== */
+    .toolbar {
+      background: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .toolbar-left, .toolbar-right {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .search-input, .filter-select {
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+    }
+
+    .search-input {
+      min-width: 250px;
+    }
+
+    .search-input:focus, .filter-select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+
+    /* ===== Buttons ===== */
+    .btn-primary, .btn-secondary, .btn-small {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .btn-secondary {
+      background: var(--secondary-color);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #1976D2;
+      transform: translateY(-2px);
+    }
+
+    .btn-small {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+    }
+
+    .btn-edit {
+      background: var(--secondary-color);
+      color: white;
+    }
+
+    .btn-edit:hover {
+      background: #1976D2;
+    }
+
+    .btn-delete {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .btn-delete:hover {
+      background: #d32f2f;
+    }
+
+    /* ===== Column Panel ===== */
+    .column-panel {
+      display: none;
+      background: #f9f9f9;
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+    }
+
+    .column-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .column-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .column-toggles label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ===== Table Section ===== */
+    .table-section {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .items-table thead {
+      background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .items-table th {
+      padding: 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-color);
+      border-bottom: 2px solid var(--border-color);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .items-table th.sortable:hover {
+      background: #e0e0e0;
+    }
+
+    .items-table th.sort-asc::after {
+      content: ' ▲';
+      font-size: 0.7rem;
+    }
+
+    .items-table th.sort-desc::after {
+      content: ' ▼';
+      font-size: 0.7rem;
+    }
+
+    .items-table td {
+      padding: 1rem;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+    }
+
+    .items-table tbody tr:hover {
+      background: rgba(76, 175, 80, 0.05);
+    }
+
+    .empty-state td {
+      padding: 3rem;
+    }
+
+    .empty-message {
+      text-align: center;
+      color: #999;
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    .file-link {
+      color: var(--secondary-color);
+      text-decoration: none;
+    }
+
+    .file-link:hover {
+      text-decoration: underline;
+    }
+
+    /* ===== Modal ===== */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      padding: 2rem;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      max-width: 700px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      cursor: pointer;
+      color: #999;
+      transition: color 0.3s;
+    }
+
+    .modal-close:hover {
+      color: var(--text-color);
+    }
+
+    .modal-body {
+      padding: 2rem;
+    }
+
+    .info-banner {
+      background: #f0f7ff;
+      border-left: 4px solid var(--primary-color);
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      border-radius: 4px;
+      color: var(--text-color);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .form-group label {
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    .form-group input, .form-group textarea {
+      padding: 0.7rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      transition: all 0.3s ease;
+    }
+
+    .form-group input:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+
+    .items-preview {
+      display: none;
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+
+    .items-preview h4 {
+      margin-top: 0;
+      color: #666;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .items-preview ul {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0 0;
+    }
+
+    .items-preview li {
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .items-preview li:last-child {
+      border-bottom: none;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .app-header {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .toolbar {
+        flex-direction: column;
+      }
+
+      .toolbar-left, .toolbar-right {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .search-input {
+        width: 100%;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .items-table {
+        font-size: 0.8rem;
+      }
+
+      .items-table th, .items-table td {
+        padding: 0.6rem;
+      }
+    }
+
+    /* ===== Hidden utility ===== */
+    [hidden] {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
 
   <!-- ===== Integrity Banner ===== -->
-  <div id="integrityBanner" style="display:none; background:#fff3cd; border:1px solid #ffc107; padding:0.75rem 1rem; margin-bottom:1rem;">
+  <div id="integrityBanner" class="integrity-banner" style="display:none;">
     <span id="integrityMessage"></span>
-    <button id="closeBannerBtn" style="float:right; background:none; border:none; cursor:pointer; font-size:1.1rem;">&times;</button>
-    <button id="recheckBtn" style="margin-left:1rem;">Re-check</button>
+    <div class="banner-buttons">
+      <button id="recheckBtn" class="btn-secondary" data-i18n="recheck">Re-check</button>
+      <button id="closeBannerBtn" class="banner-close">&times;</button>
+    </div>
   </div>
 
   <!-- ===== Header ===== -->
   <header class="app-header">
     <div class="header-left">
-      <h1>🧾 Receipt &amp; Warranty Manager</h1>
+      <h1 data-i18n="appTitle">🧾 Receipt & Warranty Manager</h1>
     </div>
     <div class="header-right">
-      <span id="itemCount" class="item-count">0 items</span>
+      <div class="language-selector">
+        <label data-i18n="language">Language:</label>
+        <select id="languageSelect">
+          <option value="en">English</option>
+          <option value="el">Ελληνικά (Greek)</option>
+          <option value="nl">Nederlands (Dutch)</option>
+          <option value="lv">Latviešu (Latvian)</option>
+        </select>
+      </div>
+      <span id="itemCount" class="item-count" data-i18n="itemCount">0 items</span>
     </div>
   </header>
 
@@ -32,10 +604,11 @@
       <div id="dropZone" class="drop-zone">
         <div class="drop-zone-content">
           <span class="drop-icon">📁</span>
-          <p>Drag &amp; Drop receipt file here or<br>
-            <a href="#" class="browse-link">click to browse</a>
+          <p>
+            <span data-i18n="dragDrop">Drag & Drop receipt file here or</span><br>
+            <a href="#" class="browse-link" data-i18n="clickBrowse">click to browse</a>
           </p>
-          <p class="drop-hint">Supported: PDF, JPG, PNG (max 50MB)</p>
+          <p class="drop-hint" data-i18n="supported">Supported: PDF, JPG, PNG (max 50MB)</p>
         </div>
       </div>
       <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">
@@ -44,53 +617,53 @@
     <!-- ===== Toolbar ===== -->
     <section class="toolbar">
       <div class="toolbar-left">
-        <input type="text" id="searchInput" placeholder="🔍 Search..." class="search-input">
+        <input type="text" id="searchInput" data-i18n-placeholder="search" placeholder="🔍 Search..." class="search-input">
 
         <select id="projectFilter" class="filter-select">
-          <option value="">All Projects</option>
+          <option value="" data-i18n="allProjects">All Projects</option>
         </select>
 
         <select id="statusFilter" class="filter-select">
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="expiring">Expiring Soon</option>
-          <option value="expired">Expired</option>
+          <option value="" data-i18n="allStatuses">All Statuses</option>
+          <option value="active" data-i18n="statusActive">Active</option>
+          <option value="expiring" data-i18n="statusExpiring">Expiring Soon</option>
+          <option value="expired" data-i18n="statusExpired">Expired</option>
         </select>
 
         <select id="userFilter" class="filter-select">
-          <option value="">All Users</option>
+          <option value="" data-i18n="allUsers">All Users</option>
         </select>
       </div>
 
       <div class="toolbar-right">
-        <button id="refreshBtn"    class="btn-secondary">🔄 Refresh</button>
-        <button id="columnToggleBtn" class="btn-secondary">🔧 Columns</button>
-        <button id="exportJsonBtn" class="btn-secondary">⬇ JSON</button>
-        <button id="exportCsvBtn"  class="btn-secondary">⬇ CSV</button>
-        <button id="importBtn"     class="btn-secondary">⬆ Import</button>
-        <input  type="file" id="importInput" accept=".json" style="display:none;">
+        <button id="refreshBtn" class="btn-secondary" data-i18n="refresh">🔄 Refresh</button>
+        <button id="columnToggleBtn" class="btn-secondary" data-i18n="columns">🔧 Columns</button>
+        <button id="exportJsonBtn" class="btn-secondary" data-i18n="exportJson">⬇ JSON</button>
+        <button id="exportCsvBtn" class="btn-secondary" data-i18n="exportCsv">⬇ CSV</button>
+        <button id="importBtn" class="btn-secondary" data-i18n="import">⬆ Import</button>
+        <input type="file" id="importInput" accept=".json" style="display:none;">
       </div>
     </section>
 
     <!-- ===== Column toggle panel ===== -->
-    <div id="columnPanel" style="display:none; background:#f9f9f9; border:1px solid #ddd; padding:1rem; margin-bottom:1rem; border-radius:6px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-        <strong>Toggle Columns</strong>
-        <button id="closeColumnPanel" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">&times;</button>
+    <div id="columnPanel" class="column-panel">
+      <div class="column-panel-header">
+        <strong data-i18n="toggleColumns">Toggle Columns</strong>
+        <button id="closeColumnPanel" class="banner-close">&times;</button>
       </div>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-        <label><input type="checkbox" class="col-toggle" data-column="id"                 checked> ID</label>
-        <label><input type="checkbox" class="col-toggle" data-column="receipt_group_id"   checked> Group</label>
-        <label><input type="checkbox" class="col-toggle" data-column="brand"              checked> Brand</label>
-        <label><input type="checkbox" class="col-toggle" data-column="model"              checked> Model</label>
-        <label><input type="checkbox" class="col-toggle" data-column="location"           checked> Location</label>
-        <label><input type="checkbox" class="col-toggle" data-column="users"              checked> Users</label>
-        <label><input type="checkbox" class="col-toggle" data-column="project"            checked> Project</label>
-        <label><input type="checkbox" class="col-toggle" data-column="shop"               checked> Shop</label>
-        <label><input type="checkbox" class="col-toggle" data-column="purchase_date"      checked> Purchase Date</label>
-        <label><input type="checkbox" class="col-toggle" data-column="documentation"      checked> Documentation</label>
-        <label><input type="checkbox" class="col-toggle" data-column="guarantee_end_date" checked> Guarantee End</label>
-        <label><input type="checkbox" class="col-toggle" data-column="file"               checked> File</label>
+      <div class="column-toggles">
+        <label><input type="checkbox" class="col-toggle" data-column="id" checked> <span data-i18n="colId">ID</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="receipt_group_id" checked> <span data-i18n="colGroup">Group</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="brand" checked> <span data-i18n="colBrand">Brand</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="model" checked> <span data-i18n="colModel">Model</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="location" checked> <span data-i18n="colLocation">Location</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="users" checked> <span data-i18n="colUsers">Users</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="project" checked> <span data-i18n="colProject">Project</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="shop" checked> <span data-i18n="colShop">Shop</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="purchase_date" checked> <span data-i18n="colPurchaseDate">Purchase Date</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="documentation" checked> <span data-i18n="colDocumentation">Documentation</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="guarantee_end_date" checked> <span data-i18n="colGuaranteeEnd">Guarantee End</span></label>
+        <label><input type="checkbox" class="col-toggle" data-column="file" checked> <span data-i18n="colFile">File</span></label>
       </div>
     </div>
 
@@ -100,19 +673,19 @@
         <table id="itemsTable" class="items-table">
           <thead>
             <tr>
-              <th data-column="id"                 class="sortable">ID</th>
-              <th data-column="receipt_group_id"   class="sortable">Group</th>
-              <th data-column="brand"              class="sortable">Brand</th>
-              <th data-column="model"              class="sortable">Model</th>
-              <th data-column="location"           class="sortable">Location</th>
-              <th data-column="users"              class="sortable">Users</th>
-              <th data-column="project"            class="sortable">Project</th>
-              <th data-column="shop"               class="sortable">Shop</th>
-              <th data-column="purchase_date"      class="sortable">Purchase Date</th>
-              <th data-column="documentation"      class="sortable">Documentation</th>
-              <th data-column="guarantee_end_date" class="sortable">Guarantee End</th>
-              <th data-column="file"               class="sortable">File</th>
-              <th data-column="actions">Actions</th>
+              <th data-column="id" class="sortable"><span data-i18n="colId">ID</span></th>
+              <th data-column="receipt_group_id" class="sortable"><span data-i18n="colGroup">Group</span></th>
+              <th data-column="brand" class="sortable"><span data-i18n="colBrand">Brand</span></th>
+              <th data-column="model" class="sortable"><span data-i18n="colModel">Model</span></th>
+              <th data-column="location" class="sortable"><span data-i18n="colLocation">Location</span></th>
+              <th data-column="users" class="sortable"><span data-i18n="colUsers">Users</span></th>
+              <th data-column="project" class="sortable"><span data-i18n="colProject">Project</span></th>
+              <th data-column="shop" class="sortable"><span data-i18n="colShop">Shop</span></th>
+              <th data-column="purchase_date" class="sortable"><span data-i18n="colPurchaseDate">Purchase Date</span></th>
+              <th data-column="documentation" class="sortable"><span data-i18n="colDocumentation">Documentation</span></th>
+              <th data-column="guarantee_end_date" class="sortable"><span data-i18n="colGuaranteeEnd">Guarantee End</span></th>
+              <th data-column="file" class="sortable"><span data-i18n="colFile">File</span></th>
+              <th data-column="actions"><span data-i18n="colActions">Actions</span></th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -120,7 +693,7 @@
               <td colspan="13">
                 <div class="empty-message">
                   <span class="empty-icon">📦</span>
-                  <p>No items yet. Upload a receipt to get started!</p>
+                  <p data-i18n="noItems">No items yet. Upload a receipt to get started!</p>
                 </div>
               </td>
             </tr>
@@ -141,15 +714,15 @@
   <datalist id="userList"></datalist>
 
   <!-- ===== OCR Verification Modal ===== -->
-  <div id="ocrModal" class="modal" style="display:none;">
+  <div id="ocrModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>📄 Verify Receipt Data</h2>
+        <h2 data-i18n="verifyReceipt">📄 Verify Receipt Data</h2>
         <button id="closeModal" class="modal-close">&times;</button>
       </div>
 
       <div class="modal-body">
-        <p style="background:#f0f7ff; border-left:4px solid #4CAF50; padding:1rem; margin-bottom:1.5rem; border-radius:4px; color:#333;">
+        <p class="info-banner" data-i18n="verifyInfo">
           Please verify the extracted information and make corrections if needed.
         </p>
 
@@ -159,61 +732,788 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="modalShop">Shop/Store *</label>
+              <label for="modalShop"><span data-i18n="labelShop">Shop/Store</span> *</label>
               <input type="text" id="modalShop" list="shopList" required>
             </div>
             <div class="form-group">
-              <label for="modalPurchaseDate">Purchase Date *</label>
+              <label for="modalPurchaseDate"><span data-i18n="labelPurchaseDate">Purchase Date</span> *</label>
               <input type="date" id="modalPurchaseDate" required>
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="modalBrand">Brand</label>
+              <label for="modalBrand" data-i18n="labelBrand">Brand</label>
               <input type="text" id="modalBrand" list="brandList">
             </div>
             <div class="form-group">
-              <label for="modalModel">Model</label>
+              <label for="modalModel" data-i18n="labelModel">Model</label>
               <input type="text" id="modalModel" list="modelList">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="modalLocation">Location</label>
+              <label for="modalLocation" data-i18n="labelLocation">Location</label>
               <input type="text" id="modalLocation" list="locationList">
             </div>
             <div class="form-group">
-              <label for="modalProject">Project</label>
+              <label for="modalProject" data-i18n="labelProject">Project</label>
               <input type="text" id="modalProject" list="projectList">
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="modalDocumentation">Documentation</label>
+          <div class="form-group full-width">
+            <label for="modalDocumentation" data-i18n="labelDocumentation">Documentation</label>
             <input type="text" id="modalDocumentation" list="docList">
           </div>
 
-          <div class="form-group">
-            <label for="modalUsers">Users (comma-separated)</label>
-            <input type="text" id="modalUsers" placeholder="John, Jane, Bob">
+          <div class="form-group full-width">
+            <label for="modalUsers" data-i18n="labelUsers">Users (comma-separated)</label>
+            <input type="text" id="modalUsers" data-i18n-placeholder="usersPlaceholder" placeholder="John, Jane, Bob">
           </div>
 
-          <div id="modalItemsPreview" style="display:none; background:#f9f9f9; padding:1rem; border-radius:6px; margin-top:1rem;">
-            <h4 style="margin-top:0; color:#666; font-size:0.9rem; text-transform:uppercase;">📦 Detected Items (preview)</h4>
-            <ul id="modalItemsList" style="list-style:none; padding:0; margin:0.5rem 0 0 0;"></ul>
+          <div id="modalItemsPreview" class="items-preview">
+            <h4 data-i18n="detectedItems">📦 Detected Items (preview)</h4>
+            <ul id="modalItemsList"></ul>
           </div>
 
           <div class="modal-footer">
-            <button type="button" id="cancelModal" class="btn-secondary">Cancel</button>
-            <button type="submit" class="btn-primary">Save Receipt</button>
+            <button type="button" id="cancelModal" class="btn-secondary" data-i18n="cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="saveReceipt">Save Receipt</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script>
+    // ===== Internationalization (i18n) =====
+    // 📝 TRANSLATION GUIDE:
+    // To modify translations, edit the text inside the quotes below
+    // Each language (en, el, nl, lv) has the same keys
+    // Keep {count} placeholders unchanged - they get replaced with numbers
+    
+    const translations = {
+      en: {
+        appTitle: '🧾 Receipt & Warranty Manager',
+        language: 'Language:',
+        itemCount: '{count} items',
+        dragDrop: 'Drag & Drop receipt file here or',
+        clickBrowse: 'click to browse',
+        supported: 'Supported: PDF, JPG, PNG (max 50MB)',
+        search: '🔍 Search...',
+        allProjects: 'All Projects',
+        allStatuses: 'All Statuses',
+        statusActive: 'Active',
+        statusExpiring: 'Expiring Soon',
+        statusExpired: 'Expired',
+        allUsers: 'All Users',
+        refresh: '🔄 Refresh',
+        columns: '🔧 Columns',
+        exportJson: '⬇ JSON',
+        exportCsv: '⬇ CSV',
+        import: '⬆ Import',
+        toggleColumns: 'Toggle Columns',
+        colId: 'ID',
+        colGroup: 'Group',
+        colBrand: 'Brand',
+        colModel: 'Model',
+        colLocation: 'Location',
+        colUsers: 'Users',
+        colProject: 'Project',
+        colShop: 'Shop',
+        colPurchaseDate: 'Purchase Date',
+        colDocumentation: 'Document Type',
+        colGuaranteeEnd: 'Guarantee End',
+        colFile: 'File',
+        colActions: 'Actions',
+        noItems: 'No items yet. Upload a receipt to get started!',
+        verifyReceipt: '📄 Verify Receipt Data',
+        verifyInfo: 'Please verify the extracted information and make corrections if needed.',
+        labelShop: 'Shop/Store',
+        labelPurchaseDate: 'Purchase Date',
+        labelBrand: 'Brand',
+        labelModel: 'Model',
+        labelLocation: 'Location',
+        labelProject: 'Project',
+        labelDocumentation: 'Documentation',
+        labelUsers: 'Users (comma-separated)',
+        usersPlaceholder: 'John, Jane, Bob',
+        detectedItems: '📦 Detected Items (preview)',
+        cancel: 'Cancel',
+        saveReceipt: 'Save Receipt',
+        edit: 'Edit',
+        delete: 'Delete',
+        recheck: 'Re-check',
+        integrityIssues: '{count} integrity issue(s) detected.'
+      },
+      el: {
+        appTitle: '🧾 Διαχείριση Αποδείξεων & Εγγυήσεων',
+        language: 'Γλώσσα:',
+        itemCount: '{count} στοιχεία',
+        dragDrop: 'Σύρετε και αποθέστε το αρχείο απόδειξης εδώ ή',
+        clickBrowse: 'κάντε κλικ για αναζήτηση',
+        supported: 'Υποστηρίζονται: PDF, JPG, PNG (μέγιστο 50MB)',
+        search: '🔍 Αναζήτηση...',
+        allProjects: 'Όλα τα Έργα',
+        allStatuses: 'Όλες οι Καταστάσεις',
+        statusActive: 'Ενεργό',
+        statusExpiring: 'Λήγει Σύντομα',
+        statusExpired: 'Έχει Λήξει',
+        allUsers: 'Όλοι οι Χρήστες',
+        refresh: '🔄 Ανανέωση',
+        columns: '🔧 Στήλες',
+        exportJson: '⬇ JSON',
+        exportCsv: '⬇ CSV',
+        import: '⬆ Εισαγωγή',
+        toggleColumns: 'Εναλλαγή Στηλών',
+        colId: 'ID',
+        colGroup: 'Ομάδα',
+        colBrand: 'Μάρκα',
+        colModel: 'Μοντέλο',
+        colLocation: 'Τοποθεσία',
+        colUsers: 'Χρήστες',
+        colProject: 'Έργο',
+        colShop: 'Κατάστημα',
+        colPurchaseDate: 'Ημερομηνία Αγοράς',
+        colDocumentation: 'Είδος Εγγράφου',
+        colGuaranteeEnd: 'Λήξη Εγγύησης',
+        colFile: 'Αρχείο',
+        colActions: 'Ενέργειες',
+        noItems: 'Δεν υπάρχουν ακόμη στοιχεία. Ανεβάστε μια απόδειξη για να ξεκινήσετε!',
+        verifyReceipt: '📄 Επαλήθευση Δεδομένων Απόδειξης',
+        verifyInfo: 'Παρακαλώ επαληθεύστε τις εξαγόμενες πληροφορίες και κάντε διορθώσεις εάν χρειάζεται.',
+        labelShop: 'Κατάστημα',
+        labelPurchaseDate: 'Ημερομηνία Αγοράς',
+        labelBrand: 'Μάρκα',
+        labelModel: 'Μοντέλο',
+        labelLocation: 'Τοποθεσία',
+        labelProject: 'Έργο',
+        labelDocumentation: 'Τεκμηρίωση',
+        labelUsers: 'Χρήστες (διαχωρισμένοι με κόμμα)',
+        usersPlaceholder: 'Γιάννης, Μαρία, Κώστας',
+        detectedItems: '📦 Ανιχνευμένα Στοιχεία (προεπισκόπηση)',
+        cancel: 'Ακύρωση',
+        saveReceipt: 'Αποθήκευση Απόδειξης',
+        edit: 'Επεξεργασία',
+        delete: 'Διαγραφή',
+        recheck: 'Επανέλεγχος',
+        integrityIssues: '{count} πρόβλημα(-τα) ακεραιότητας εντοπίστηκαν.'
+      },
+      nl: {
+        appTitle: '🧾 Bonnetjes & Garantie Beheer',
+        language: 'Taal:',
+        itemCount: '{count} items',
+        dragDrop: 'Sleep bonnetje hier of',
+        clickBrowse: 'klik om te bladeren',
+        supported: 'Ondersteund: PDF, JPG, PNG (max 50MB)',
+        search: '🔍 Zoeken...',
+        allProjects: 'Alle Projecten',
+        allStatuses: 'Alle Statussen',
+        statusActive: 'Actief',
+        statusExpiring: 'Verloopt Binnenkort',
+        statusExpired: 'Verlopen',
+        allUsers: 'Alle Gebruikers',
+        refresh: '🔄 Vernieuwen',
+        columns: '🔧 Kolommen',
+        exportJson: '⬇ JSON',
+        exportCsv: '⬇ CSV',
+        import: '⬆ Importeren',
+        toggleColumns: 'Kolommen Wisselen',
+        colId: 'ID',
+        colGroup: 'Groep',
+        colBrand: 'Merk',
+        colModel: 'Model',
+        colLocation: 'Locatie',
+        colUsers: 'Gebruikers',
+        colProject: 'Project',
+        colShop: 'Winkel',
+        colPurchaseDate: 'Aankoopdatum',
+        colDocumentation: 'Document type',
+        colGuaranteeEnd: 'Garantie Einde',
+        colFile: 'Bestand',
+        colActions: 'Acties',
+        noItems: 'Nog geen items. Upload een bonnetje om te beginnen!',
+        verifyReceipt: '📄 Bongegevens Verifiëren',
+        verifyInfo: 'Controleer de geëxtraheerde informatie en breng indien nodig correcties aan.',
+        labelShop: 'Winkel',
+        labelPurchaseDate: 'Aankoopdatum',
+        labelBrand: 'Merk',
+        labelModel: 'Model',
+        labelLocation: 'Locatie',
+        labelProject: 'Project',
+        labelDocumentation: 'Documentatie',
+        labelUsers: 'Gebruikers (door komma gescheiden)',
+        usersPlaceholder: 'Jan, Piet, Klaas',
+        detectedItems: '📦 Gedetecteerde Items (voorbeeld)',
+        cancel: 'Annuleren',
+        saveReceipt: 'Bon Opslaan',
+        edit: 'Bewerken',
+        delete: 'Verwijderen',
+        recheck: 'Opnieuw Controleren',
+        integrityIssues: '{count} integriteitsproble(e)m(en) gedetecteerd.'
+      },
+      lv: {
+        appTitle: '🧾 Kvīšu & Garantiju Pārvaldība',
+        language: 'Valoda:',
+        itemCount: '{count} vienības',
+        dragDrop: 'Velciet kvīti šeit vai',
+        clickBrowse: 'noklikšķiniet, lai pārlūkotu',
+        supported: 'Atbalstīts: PDF, JPG, PNG (maks. 50MB)',
+        search: '🔍 Meklēt...',
+        allProjects: 'Visi Projekti',
+        allStatuses: 'Visi Statusi',
+        statusActive: 'Aktīvs',
+        statusExpiring: 'Drīz Beigsies',
+        statusExpired: 'Beidzies',
+        allUsers: 'Visi Lietotāji',
+        refresh: '🔄 Atsvaidzināt',
+        columns: '🔧 Kolonnas',
+        exportJson: '⬇ JSON',
+        exportCsv: '⬇ CSV',
+        import: '⬆ Importēt',
+        toggleColumns: 'Pārslēgt Kolonnas',
+        colId: 'ID',
+        colGroup: 'Grupa',
+        colBrand: 'Zīmols',
+        colModel: 'Modelis',
+        colLocation: 'Atrašanās vieta',
+        colUsers: 'Lietotāji',
+        colProject: 'Projekts',
+        colShop: 'Veikals',
+        colPurchaseDate: 'Pirkuma Datums',
+        colDocumentation: 'Dokument veids',
+        colGuaranteeEnd: 'Garantijas Beigas',
+        colFile: 'Fails',
+        colActions: 'Darbības',
+        noItems: 'Vēl nav vienību. Augšupielādējiet kvīti, lai sāktu!',
+        verifyReceipt: '📄 Verificēt Kvīts Datus',
+        verifyInfo: 'Lūdzu, pārbaudiet izvilkto informāciju un veiciet labojumus, ja nepieciešams.',
+        labelShop: 'Veikals',
+        labelPurchaseDate: 'Pirkuma Datums',
+        labelBrand: 'Zīmols',
+        labelModel: 'Modelis',
+        labelLocation: 'Atrašanās vieta',
+        labelProject: 'Projekts',
+        labelDocumentation: 'Dokumentācija',
+        labelUsers: 'Lietotāji (atdalīti ar komatu)',
+        usersPlaceholder: 'Jānis, Anna, Pēteris',
+        detectedItems: '📦 Atklātie Vienumi (priekšskatījums)',
+        cancel: 'Atcelt',
+        saveReceipt: 'Saglabāt Kvīti',
+        edit: 'Rediģēt',
+        delete: 'Dzēst',
+        recheck: 'Pārbaudīt Vēlreiz',
+        integrityIssues: '{count} integritātes problēma(-as) konstatēta(-as).'
+      }
+    };
+
+    let currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+
+    function t(key, params = {}) {
+      let text = translations[currentLanguage]?.[key] || translations['en'][key] || key;
+      Object.keys(params).forEach(param => {
+        text = text.replace(`{${param}}`, params[param]);
+      });
+      return text;
+    }
+
+    function updateUI() {
+      // Update all elements with data-i18n attribute
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (el.tagName === 'INPUT' && el.type !== 'button' && el.type !== 'submit') {
+          return; // Skip input fields text content
+        }
+        el.textContent = t(key);
+      });
+
+      // Update placeholders
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = t(key);
+      });
+
+      // Update item count
+      const count = allData.items?.length || 0;
+      const itemCountEl = document.getElementById('itemCount');
+      if (itemCountEl) {
+        itemCountEl.textContent = t('itemCount', { count });
+      }
+
+      // Update buttons in table
+      document.querySelectorAll('.btn-edit').forEach(btn => btn.textContent = t('edit'));
+      document.querySelectorAll('.btn-delete').forEach(btn => btn.textContent = t('delete'));
+    }
+
+    function changeLanguage(lang) {
+      currentLanguage = lang;
+      localStorage.setItem('preferredLanguage', lang);
+      updateUI();
+    }
+
+    // Initialize language selector
+    document.getElementById('languageSelect').value = currentLanguage;
+    document.getElementById('languageSelect').addEventListener('change', (e) => {
+      changeLanguage(e.target.value);
+    });
+
+    // ===== Original Application Logic =====
+    let allData = { receipts: [], items: [], next_id: 1, integrity_issues: [] };
+    let suggestions = { shops: [], brands: [], models: [], locations: [], documentation: [], projects: [], users: [] };
+    let currentSort = { column: 'id', direction: 'asc' };
+    let visibleColumns = new Set([
+      'id', 'receipt_group_id', 'brand', 'model', 'location', 'users',
+      'project', 'shop', 'purchase_date', 'documentation', 'guarantee_end_date', 'file', 'actions'
+    ]);
+
+    const API = {
+      data: '/api/data',
+      suggestions: '/api/suggestions',
+      exportJson: '/api/export/json',
+      exportCsv: '/api/export/csv',
+      importJson: '/api/import/json',
+      integrityCheck: '/api/integrity/check',
+      upload: '/api/upload',
+      updateItem: (id) => `/api/item/${id}`,
+      deleteItem: (id) => `/api/item/${id}`,
+      fileUrl: (path) => `/api/file?path=${encodeURIComponent(path)}`
+    };
+
+    function $(id) { return document.getElementById(id); }
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
+
+    function bind(id, event, handler) {
+      const el = $(id);
+      if (!el) { console.warn(`[bind] Missing #${id}`); return; }
+      el.addEventListener(event, handler);
+    }
+
+    async function fetchJson(url, opts) {
+      const resp = await fetch(url, opts);
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`${opts?.method || 'GET'} ${url} failed: ${resp.status} ${text}`);
+      }
+      return await resp.json();
+    }
+
+    function downloadUrl(url) {
+      const a = document.createElement('a');
+      a.href = url; a.download = '';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    function exportJson() { downloadUrl(API.exportJson); }
+    function exportCsv()  { downloadUrl(API.exportCsv);  }
+
+    async function loadData() {
+      try {
+        allData = await fetchJson(API.data);
+        const banner = $('integrityBanner');
+        if (banner) {
+          const issues = allData.integrity_issues || [];
+          banner.style.display = issues.length > 0 ? 'flex' : 'none';
+          if ($('integrityMessage'))
+            $('integrityMessage').textContent = issues.length > 0 ? t('integrityIssues', { count: issues.length }) : '';
+        }
+        filterAndRender();
+      } catch (err) {
+        console.error('Error loading data:', err);
+        alert('Error loading data (see Console).');
+      }
+    }
+
+    async function loadSuggestions() {
+      try {
+        suggestions = await fetchJson(API.suggestions);
+        populateDataLists();
+        populateFilterDropdowns();
+      } catch (err) { console.error('Error loading suggestions:', err); }
+    }
+
+    function populateDataLists() {
+      const set = (id, arr) => {
+        const el = $(id); if (!el) return;
+        const safe = Array.isArray(arr) ? arr : [];
+        el.innerHTML = safe.map(s => `<option value="${String(s).replace(/"/g, '&quot;')}">`).join('');
+      };
+      set('shopList', suggestions.shops);
+      set('brandList', suggestions.brands);
+      set('modelList', suggestions.models);
+      set('locationList', suggestions.locations);
+      set('docList', suggestions.documentation);
+      set('projectList', suggestions.projects);
+      set('userList', suggestions.users);
+    }
+
+    function populateFilterDropdowns() {
+      const projectFilter = $('projectFilter');
+      if (projectFilter) {
+        const current = projectFilter.value;
+        projectFilter.innerHTML = `<option value="">${t('allProjects')}</option>` +
+          (Array.isArray(suggestions.projects) ? suggestions.projects : [])
+            .map(p => `<option value="${String(p).replace(/"/g, '&quot;')}">${p}</option>`).join('');
+        projectFilter.value = current;
+      }
+      const userFilter = $('userFilter');
+      if (userFilter) {
+        const current = userFilter.value;
+        userFilter.innerHTML = `<option value="">${t('allUsers')}</option>` +
+          (Array.isArray(suggestions.users) ? suggestions.users : [])
+            .map(u => `<option value="${String(u).replace(/"/g, '&quot;')}">${u}</option>`).join('');
+        userFilter.value = current;
+      }
+    }
+
+    function receiptMap() {
+      const map = new Map();
+      (allData.receipts || []).forEach(r => map.set(r.receipt_group_id, r));
+      return map;
+    }
+
+    function normalizeUsers(u) {
+      if (Array.isArray(u)) return u;
+      return String(u || '').split(';').map(s => s.trim()).filter(Boolean);
+    }
+
+    function getStatus(item) {
+      const end = item?.guarantee_end_date;
+      if (!end || end === 'N/A') return 'active';
+      const d = new Date(String(end).replace(/-/g, '/'));
+      if (isNaN(d)) return 'active';
+      const diffDays = Math.floor((d - new Date()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) return 'expired';
+      if (diffDays <= 90) return 'expiring';
+      return 'active';
+    }
+
+    function applyFilters(rows) {
+      const q       = ($('searchInput')?.value  || '').trim().toLowerCase();
+      const project = $('projectFilter')?.value || '';
+      const status  = $('statusFilter')?.value  || '';
+      const user    = $('userFilter')?.value    || '';
+      return (rows || []).filter(r => {
+        if (project && String(r.project || '') !== project) return false;
+        if (status  && getStatus(r) !== status) return false;
+        if (user    && !normalizeUsers(r.users).includes(user)) return false;
+        if (q) {
+          const hay = [
+            r.id, r.receipt_group_id, r.brand, r.model, r.location, r.project,
+            r.shop, r.purchase_date, r.documentation, r.guarantee_end_date,
+            normalizeUsers(r.users).join('; '), r.file
+          ].map(x => String(x || '').toLowerCase()).join(' | ');
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    }
+
+    function sortRows(rows) {
+      const col = currentSort.column;
+      const dir = currentSort.direction === 'desc' ? -1 : 1;
+      return [...rows].sort((a, b) => String(a?.[col] ?? '').localeCompare(String(b?.[col] ?? '')) * dir);
+    }
+
+    function buildRows() {
+      const rmap = receiptMap();
+      return (allData.items || []).map(it => {
+        const r = rmap.get(it.receipt_group_id) || {};
+        return {
+          id: it.id, receipt_group_id: it.receipt_group_id,
+          brand: it.brand || '', model: it.model || '', location: it.location || '',
+          users: it.users || [], project: it.project || '',
+          shop: r.shop || '', purchase_date: r.purchase_date || '',
+          documentation: r.documentation || '', guarantee_end_date: it.guarantee_end_date || '',
+          file: r.receipt_filename || it.receipt_relative_path || '',
+          receipt_relative_path: r.receipt_relative_path || it.receipt_relative_path || ''
+        };
+      });
+    }
+
+    function renderTable(rows) {
+      const tbody = $('tableBody');
+      if (!tbody) return;
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="13"><div class="empty-message"><span class="empty-icon">📦</span><p>${t('noItems')}</p></div></td></tr>`;
+        if ($('itemCount')) $('itemCount').textContent = t('itemCount', { count: 0 });
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const fileCell = r.receipt_relative_path
+          ? `<a href="${API.fileUrl(r.receipt_relative_path)}" target="_blank" class="file-link" title="${r.receipt_relative_path}">${r.file || r.receipt_relative_path}</a>`
+          : (r.file ? r.file : '');
+
+        return `
+        <tr>
+          <td data-column="id">${r.id ?? ''}</td>
+          <td data-column="receipt_group_id">${r.receipt_group_id ?? ''}</td>
+          <td data-column="brand">${r.brand ?? ''}</td>
+          <td data-column="model">${r.model ?? ''}</td>
+          <td data-column="location">${r.location ?? ''}</td>
+          <td data-column="users">${normalizeUsers(r.users).join('; ')}</td>
+          <td data-column="project">${r.project ?? ''}</td>
+          <td data-column="shop">${r.shop ?? ''}</td>
+          <td data-column="purchase_date">${r.purchase_date ?? ''}</td>
+          <td data-column="documentation">${r.documentation ?? ''}</td>
+          <td data-column="guarantee_end_date">${r.guarantee_end_date ?? ''}</td>
+          <td data-column="file">${fileCell}</td>
+          <td data-column="actions">
+            <button type="button" class="btn-small btn-edit" onclick="editItem(${r.id})">${t('edit')}</button>
+            <button type="button" class="btn-small btn-delete" onclick="deleteItem(${r.id})">${t('delete')}</button>
+          </td>
+        </tr>`;
+      }).join('');
+      if ($('itemCount')) $('itemCount').textContent = t('itemCount', { count: rows.length });
+      updateColumnVisibility();
+    }
+
+    function updateColumnVisibility() {
+      qsa('th[data-column]').forEach(th => { th.style.display = visibleColumns.has(th.dataset.column) ? '' : 'none'; });
+      qsa('#itemsTable td[data-column]').forEach(td => { td.style.display = visibleColumns.has(td.dataset.column) ? '' : 'none'; });
+    }
+
+    function updateSortIndicators() {
+      qsa('th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.column === currentSort.column)
+          th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      });
+    }
+
+    function filterAndRender() {
+      renderTable(sortRows(applyFilters(buildRows())));
+    }
+
+    async function handleImport(e) {
+      const f = e?.target?.files?.[0]; if (!f) return;
+      try {
+        const payload = JSON.parse(await f.text());
+        await fetchJson(API.importJson, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        await loadData(); await loadSuggestions();
+        alert('Imported successfully.');
+      } catch (err) { console.error('Import failed:', err); alert('Import failed (see Console).'); }
+      finally { e.target.value = ''; }
+    }
+
+    async function recheckIntegrity() {
+      try { await fetchJson(API.integrityCheck, { method: 'POST' }); await loadData(); }
+      catch (err) { console.error('Integrity check failed:', err); await loadData(); }
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const resp = await fetch(API.upload, { method: 'POST', body: formData });
+        if (!resp.ok) { alert(`Upload failed: ${await resp.text()}`); return; }
+        const result = await resp.json();
+        if (!result.success) { alert(`Upload failed: ${result.error || 'Unknown error'}`); return; }
+        showOcrModal(result);
+      } catch (err) { console.error('Upload error:', err); alert(`Upload failed: ${err.message}`); }
+      finally { const fi = $('fileInput'); if (fi) fi.value = ''; }
+    }
+
+    function showOcrModal(uploadResult) {
+      const modal = $('ocrModal'); if (!modal) return;
+      const ocr = uploadResult.ocr_data || {};
+      $('modalItemId').value         = uploadResult.item_id;
+      $('modalReceiptGroupId').value = uploadResult.receipt_group_id;
+      $('modalShop').value           = ocr.shop || '';
+      const pd = ocr.purchase_date || '';
+      if (pd && pd !== 'N/A') {
+        try { $('modalPurchaseDate').value = new Date(pd.replace(/-/g, ' ')).toISOString().split('T')[0]; }
+        catch { $('modalPurchaseDate').value = ''; }
+      }
+      $('modalBrand').value = ''; $('modalModel').value = ''; $('modalLocation').value = '';
+      $('modalProject').value = ''; $('modalDocumentation').value = ''; $('modalUsers').value = '';
+      const itemsPreview = $('modalItemsPreview');
+      const itemsList    = $('modalItemsList');
+      if (ocr.items && ocr.items.length > 0) {
+        itemsList.innerHTML = ocr.items.map(i => `<li>${i.name} - ${i.price}</li>`).join('');
+        itemsPreview.style.display = 'block';
+      } else { itemsPreview.style.display = 'none'; }
+      modal.style.display = 'flex';
+    }
+
+    function closeOcrModal() {
+      const modal = $('ocrModal');
+      if (modal) { modal.style.display = 'none'; $('ocrForm').reset(); }
+    }
+
+    async function saveOcrData(e) {
+      e.preventDefault();
+      const itemId         = parseInt($('modalItemId').value);
+      const receiptGroupId = $('modalReceiptGroupId').value;
+      if (!itemId || !receiptGroupId) { alert('Invalid item or receipt ID'); return; }
+
+      const shop          = $('modalShop').value.trim();
+      const purchaseDate  = $('modalPurchaseDate').value;
+      const brand         = $('modalBrand').value.trim()         || 'N/A';
+      const model         = $('modalModel').value.trim()         || 'N/A';
+      const location      = $('modalLocation').value.trim()      || 'N/A';
+      const project       = $('modalProject').value.trim()       || 'N/A';
+      const documentation = $('modalDocumentation').value.trim() || 'N/A';
+      const usersInput    = $('modalUsers').value.trim();
+      const users         = usersInput ? usersInput.split(',').map(u => u.trim()).filter(Boolean) : [];
+
+      if (!shop || !purchaseDate) { alert('Shop and Purchase Date are required'); return; }
+
+      let formattedDate = purchaseDate;
+      try {
+        const d = new Date(purchaseDate + 'T00:00:00');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        formattedDate = `${d.getFullYear()}-${months[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')}`;
+      } catch { /* keep original */ }
+
+      try {
+        const resp = await fetchJson(API.updateItem(itemId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop, purchase_date: formattedDate, brand, model, location, project, documentation, users })
+        });
+        if (!resp.success) { alert(`Save failed: ${resp.error || 'Unknown error'}`); return; }
+        closeOcrModal();
+        await loadData(); await loadSuggestions();
+      } catch (err) { console.error('Save error:', err); alert(`Save failed: ${err.message}`); }
+    }
+
+    async function editItem(itemId) {
+      const item = allData.items.find(i => i.id === itemId);
+      if (!item) { alert('Item not found'); return; }
+      const receipt = allData.receipts.find(r => r.receipt_group_id === item.receipt_group_id);
+      if (!receipt) { alert('Receipt not found'); return; }
+
+      $('modalItemId').value         = item.id;
+      $('modalReceiptGroupId').value = item.receipt_group_id;
+      $('modalShop').value           = receipt.shop          !== 'N/A' ? receipt.shop          : '';
+      $('modalBrand').value          = item.brand            !== 'N/A' ? item.brand            : '';
+      $('modalModel').value          = item.model            !== 'N/A' ? item.model            : '';
+      $('modalLocation').value       = item.location         !== 'N/A' ? item.location         : '';
+      $('modalProject').value        = item.project          !== 'N/A' ? item.project          : '';
+      $('modalDocumentation').value  = receipt.documentation !== 'N/A' ? receipt.documentation : '';
+      $('modalUsers').value          = (item.users || []).join(', ');
+
+      const pd = receipt.purchase_date || '';
+      if (pd && pd !== 'N/A') {
+        try { $('modalPurchaseDate').value = new Date(pd.replace(/-/g, ' ')).toISOString().split('T')[0]; }
+        catch { $('modalPurchaseDate').value = ''; }
+      } else { $('modalPurchaseDate').value = ''; }
+
+      $('modalItemsPreview').style.display = 'none';
+      $('ocrModal').style.display = 'flex';
+    }
+
+    async function deleteItem(itemId) {
+      const item = allData.items.find(i => i.id === itemId);
+      if (!item) { alert('Item not found'); return; }
+
+      const itemsInGroup = allData.items.filter(i => i.receipt_group_id === item.receipt_group_id);
+      const receipt = allData.receipts.find(r => r.receipt_group_id === item.receipt_group_id);
+      const hasFile = !!(receipt && receipt.receipt_relative_path);
+
+      let msg;
+      if (itemsInGroup.length === 1) {
+        if (hasFile) {
+          msg =
+            `⚠️  PERMANENT DELETE — please read carefully!\n\n` +
+            `You are about to delete:\n` +
+            `  • Record  : ID ${itemId} (${item.brand || 'N/A'} ${item.model || 'N/A'})\n` +
+            `  • File    : ${receipt.receipt_filename || receipt.receipt_relative_path}\n\n` +
+            `The receipt FILE WILL BE DELETED from disk.\n` +
+            `This action cannot be undone.\n\n` +
+            `Continue?`;
+        } else {
+          msg =
+            `⚠️  PERMANENT DELETE\n\n` +
+            `You are about to delete record ID ${itemId}.\n` +
+            `No file is associated with this record.\n\n` +
+            `Continue?`;
+        }
+      } else {
+        msg =
+          `⚠️  DELETE RECORD\n\n` +
+          `You are about to delete record ID ${itemId}.\n\n` +
+          `ℹ️  The receipt file will NOT be deleted — it is shared\n` +
+          `with ${itemsInGroup.length - 1} other item(s) in group ${item.receipt_group_id}.\n\n` +
+          `Continue?`;
+      }
+
+      if (!confirm(msg)) return;
+
+      try {
+        const resp = await fetchJson(API.deleteItem(itemId), { method: 'DELETE' });
+        if (!resp.success) { alert(`Delete failed: ${resp.error || 'Unknown error'}`); return; }
+        await loadData();
+        await loadSuggestions();
+      } catch (err) {
+        console.error('Delete error:', err);
+        alert(`Delete failed: ${err.message}`);
+      }
+    }
+
+    // Make functions globally accessible
+    window.editItem = editItem;
+    window.deleteItem = deleteItem;
+
+    function setupEventListeners() {
+      ['dragenter','dragover','dragleave','drop'].forEach(ev =>
+        window.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false)
+      );
+
+      const dropZone  = $('dropZone');
+      const fileInput = $('fileInput');
+      if (dropZone && fileInput) {
+        const browseLink = qs('.browse-link');
+        if (browseLink) browseLink.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); fileInput.click(); });
+        dropZone.addEventListener('click',     e => { if (!e.target.classList.contains('browse-link')) fileInput.click(); });
+        dropZone.addEventListener('dragover',  () => dropZone.classList.add('drag-over'));
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop',      e => { dropZone.classList.remove('drag-over'); const f = e.dataTransfer?.files?.[0]; if (f) handleFile(f); });
+        fileInput.addEventListener('change',   e => { const f = e.target.files?.[0]; if (f) handleFile(f); });
+      }
+
+      bind('searchInput',   'input',  filterAndRender);
+      bind('projectFilter', 'change', filterAndRender);
+      bind('statusFilter',  'change', filterAndRender);
+      bind('userFilter',    'change', filterAndRender);
+      bind('refreshBtn',    'click',  () => { loadData(); loadSuggestions(); });
+      bind('exportJsonBtn', 'click',  exportJson);
+      bind('exportCsvBtn',  'click',  exportCsv);
+      bind('importBtn',     'click',  () => $('importInput')?.click());
+      bind('importInput',   'change', handleImport);
+      bind('recheckBtn',    'click',  recheckIntegrity);
+      bind('closeBannerBtn','click',  () => { const b = $('integrityBanner'); if (b) b.style.display = 'none'; });
+      bind('columnToggleBtn','click', () => { const p = $('columnPanel'); if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none'; });
+      bind('closeColumnPanel','click',() => { const p = $('columnPanel'); if (p) p.style.display = 'none'; });
+
+      bind('closeModal',  'click',  closeOcrModal);
+      bind('cancelModal', 'click',  closeOcrModal);
+      bind('ocrForm',     'submit', saveOcrData);
+
+      const modal = $('ocrModal');
+      if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeOcrModal(); });
+
+      qsa('.col-toggle').forEach(t => t.addEventListener('change', e => {
+        const col = e.target.dataset.column; if (!col) return;
+        if (e.target.checked) visibleColumns.add(col); else visibleColumns.delete(col);
+        updateColumnVisibility();
+      }));
+
+      qsa('th.sortable').forEach(th => th.addEventListener('click', () => {
+        const col = th.dataset.column; if (!col) return;
+        if (currentSort.column === col) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        else { currentSort.column = col; currentSort.direction = 'asc'; }
+        updateSortIndicators(); filterAndRender();
+      }));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateUI();
+      loadData(); loadSuggestions(); setupEventListeners();
+    });
+  </script>
 </body>
 </html>
