@@ -1,5 +1,13 @@
 # Receipt & Warranty Manager
 
+## Screenshots
+
+![Main Interface](screenshots/main-interface.png)
+*Receipt Manager main interface with item list and search filters*
+
+![Add Item Dialog](screenshots/add-item-dialog.png)
+*Adding a new receipt with item details*
+
 A local web-based application for managing receipts and item warranties with automatic file organization, integrity checking, and a modern green-themed UI.
 
 ## Features
