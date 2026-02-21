@@ -5,7 +5,8 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --arm64"
+    "build": "electron-builder --mac --arm64",
+    "build:dmg": "electron-builder --mac --arm64 dmg"
   },
   "devDependencies": {
     "electron": "^40.6.0",
@@ -28,10 +29,32 @@
       "identity": null,
       "target": [
         {
-          "target": "dir",
+          "target": "dmg",
           "arch": [
             "arm64"
           ]
+        }
+      ],
+      "icon": "icon.icns"
+    },
+    "dmg": {
+      "title": "Receipt Manager",
+      "icon": "icon.icns",
+      "window": {
+        "width": 600,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 450,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
         }
       ]
     },
