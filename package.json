@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --mac --arm64",
-    "build:dmg": "electron-builder --mac --arm64 dmg"
+    "build:x64": "electron-builder --mac --x64",
+    "build:universal": "electron-builder --mac --universal"
   },
   "devDependencies": {
     "electron": "^40.6.0",
@@ -17,42 +18,25 @@
     "productName": "Receipt Manager",
     "asar": true,
     "asarUnpack": [
-      "**/*.py",
+      "app.py",
+      "ocr_service.py",
       "venv/**/*",
       "templates/**/*",
       "static/**/*",
       "data/**/*",
-      "storage/**/*"
+      "storage/**/*",
+      "requirements.txt"
     ],
     "mac": {
       "category": "public.app-category.productivity",
       "identity": null,
       "target": [
         {
-          "target": "dmg",
+          "target": "dir",
           "arch": [
-            "arm64"
+            "arm64",
+            "x64"
           ]
-        }
-      ]
-    },
-    "dmg": {
-      "title": "Receipt Manager",
-      "window": {
-        "width": 600,
-        "height": 400
-      },
-      "contents": [
-        {
-          "x": 150,
-          "y": 200,
-          "type": "file"
-        },
-        {
-          "x": 450,
-          "y": 200,
-          "type": "link",
-          "path": "/Applications"
         }
       ]
     },
