@@ -192,7 +192,7 @@ function showErrorPage(errorMessage) {
     </html>
   `;
   
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   }
 }
@@ -206,7 +206,8 @@ function createWindow() {
     backgroundColor: '#ffffff',
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: true
     }
   });
 
@@ -265,12 +266,17 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // Open DevTools for debugging (comment out in production)
+  // mainWindow.webContents.openDevTools();
+
   // Wait for Flask
   console.log('[Electron] Waiting for Flask to start at http://127.0.0.1:5000 ...');
   waitForFlask('http://127.0.0.1:5000', 60,
     () => {
-      console.log('[Electron] Loading app window...');
-      mainWindow.loadURL('http://127.0.0.1:5000');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        console.log('[Electron] Loading app window...');
+        mainWindow.loadURL('http://127.0.0.1:5000');
+      }
     },
     (error) => {
       console.error('[Electron] Flask startup failed:', error);
@@ -299,6 +305,9 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+}).catch(err => {
+  console.error('[Electron] Error in app.whenReady():', err);
+  dialog.showErrorBox('Startup Error', err.message);
 });
 
 app.on('window-all-closed', () => {
