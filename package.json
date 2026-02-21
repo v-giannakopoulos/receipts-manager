@@ -14,6 +14,15 @@
   "build": {
     "appId": "eu.savagi.receipts-manager",
     "productName": "Receipt Manager",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.py",
+      "venv/**/*",
+      "templates/**/*",
+      "static/**/*",
+      "data/**/*",
+      "storage/**/*"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "identity": null,
