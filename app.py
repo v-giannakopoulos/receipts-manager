@@ -9,13 +9,14 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 # ✨ OCR integration
 from ocr_service import extract_receipt_data
 
+PORT     = 8765   # Avoid macOS AirPlay Receiver on port 5000
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DATABASE_DIR = DATA_DIR / "database"
@@ -380,7 +381,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(csv_data.encode("utf-8"))
             return
 
-        # ── Serve a stored receipt / warranty file ────────────────────────────────────
+        # ── Serve a stored receipt / warranty file ────────────────────────────────────────────
         # Usage: GET /api/file?path=storage/_Receipts/uploads/somefile.pdf
         if path == "/api/file":
             qs_params = parse_qs(parsed.query)
@@ -744,29 +745,24 @@ def main():
 
     if not (TEMPLATES_DIR / "index.html").exists():
         print("ERROR: templates/index.html not found!")
-        print("Make sure you have:")
-        print("  - templates/index.html")
-        print("  - static/css/style.css")
-        print("  - static/js/app.js")
         return
 
     if not (STATIC_DIR / "css" / "style.css").exists():
         print("WARNING: static/css/style.css not found!")
-        print("The app will work but look unstyled.")
         print()
 
-    print("🚀 Server on http://127.0.0.1:5000")
+    print(f"\U0001f680 Server on http://127.0.0.1:{PORT}")
     print("Press Ctrl+C to stop")
     print()
 
     t = threading.Thread(target=integrity_worker, daemon=True)
     t.start()
 
-    server = HTTPServer(("127.0.0.1", 5000), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n🛑 Shutting down...")
+        print("\n\U0001f6d1 Shutting down...")
     finally:
         server.server_close()
 
