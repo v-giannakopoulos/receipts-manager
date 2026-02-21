@@ -1,5 +1,5 @@
 const { app, BrowserWindow, shell, dialog } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -7,6 +7,21 @@ const fs = require('fs');
 let flaskProcess = null;
 let mainWindow   = null;
 let startupError = null;
+
+// ── Kill any process holding the given port ────────────────────────────────
+function killPortProcess(port) {
+  try {
+    const pids = execSync(`lsof -ti :${port}`, {
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+    if (pids) {
+      pids.split('\n').forEach(pid => {
+        try { process.kill(parseInt(pid), 'SIGKILL'); } catch (e) {}
+      });
+      console.log(`[Electron] Killed stale process(es) on port ${port}:`, pids);
+    }
+  } catch (e) { /* no process on that port, fine */ }
+}
 
 // ── Get the correct base directory ────────────────────────────────────────
 function getAppDir() {
@@ -61,24 +76,20 @@ function startFlask() {
   
   const appDir = getAppDir();
   const appPath = path.join(appDir, 'app.py');
-
   console.log('[Flask] Starting with Python:', pythonPath);
   console.log('[Flask] App directory:', appDir);
   console.log('[Flask] App path:', appPath);
   console.log('[Flask] App.py exists:', fs.existsSync(appPath));
-
   if (!fs.existsSync(appPath)) {
     console.error('[Flask] ERROR: app.py not found at:', appPath);
     startupError = `Cannot find app.py at: ${appPath}`;
     return false;
   }
-
   try {
     flaskProcess = spawn(pythonPath, [appPath], {
       cwd: appDir,
       env: { ...process.env, FLASK_ENV: 'production', PYTHONUNBUFFERED: '1' }
     });
-
     flaskProcess.stdout.on('data', d => console.log('[Flask]', d.toString().trim()));
     flaskProcess.stderr.on('data', d => {
       const msg = d.toString().trim();
@@ -103,16 +114,24 @@ function startFlask() {
 
 // ── Wait until Flask is ready, then open the window ───────────────────────
 function waitForFlask(url, retries, callback, errorCallback) {
-  http.get(url, () => {
+  const req = http.get(url, (res) => {
+    res.resume(); // consume body so socket is released properly
     console.log('[Electron] Flask is responding!');
     callback();
-  })
-  .on('error', () => {
-    if (retries <= 0) { 
+  });
+  req.setTimeout(1000, () => req.destroy());
+  req.on('error', () => {
+    // If Flask process already exited, no point waiting
+    if (flaskProcess && flaskProcess.exitCode !== null) {
+      const error = startupError || `Flask exited with code ${flaskProcess.exitCode}`;
+      errorCallback(error);
+      return;
+    }
+    if (retries <= 0) {
       console.error('[Electron] Flask never started after 30 seconds!');
       const error = startupError || 'Flask server failed to start after 30 seconds. Check if Python and dependencies are installed.';
       errorCallback(error);
-      return; 
+      return;
     }
     setTimeout(() => waitForFlask(url, retries - 1, callback, errorCallback), 500);
   });
@@ -157,7 +176,7 @@ function showErrorPage(errorMessage) {
     </head>
     <body>
       <div class="error-box">
-        <h1>⚠️ Startup Error</h1>
+        <h1>Startup Error</h1>
         <p>Receipt Manager could not start the Flask server.</p>
         <pre>${errorMessage}</pre>
         <div class="help">
@@ -181,12 +200,12 @@ function showErrorPage(errorMessage) {
 // ── Create the main app window ─────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width:  1400,
+    width: 1400,
     height: 900,
-    title:  'Receipt & Warranty Manager',
+    title: 'Receipt & Warranty Manager',
     backgroundColor: '#ffffff',
     webPreferences: {
-      nodeIntegration:  false,
+      nodeIntegration: false,
       contextIsolation: true
     }
   });
@@ -248,7 +267,7 @@ function createWindow() {
 
   // Wait for Flask
   console.log('[Electron] Waiting for Flask to start at http://127.0.0.1:5000 ...');
-  waitForFlask('http://127.0.0.1:5000', 60, 
+  waitForFlask('http://127.0.0.1:5000', 60,
     () => {
       console.log('[Electron] Loading app window...');
       mainWindow.loadURL('http://127.0.0.1:5000');
@@ -263,18 +282,22 @@ function createWindow() {
 }
 
 // ── App lifecycle ──────────────────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   console.log('[Electron] App is ready, starting Flask...');
   console.log('[Electron] Is packaged:', app.isPackaged);
   console.log('[Electron] __dirname:', __dirname);
-  
+
+  // Kill any stale process holding port 5000 from a previous run
+  killPortProcess(5000);
+  await new Promise(r => setTimeout(r, 300)); // brief wait for OS to release port
+
   const flaskStarted = startFlask();
-  
+
   if (!flaskStarted && startupError) {
     // Show error dialog immediately
     dialog.showErrorBox('Startup Error', startupError);
   }
-  
+
   createWindow();
 });
 
