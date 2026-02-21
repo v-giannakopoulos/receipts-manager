@@ -207,8 +207,22 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      webSecurity: false  // Allow loading from localhost
     }
+  });
+
+  // Modify CSP headers to allow Flask content
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    // Remove restrictive CSP headers and allow all localhost content
+    const responseHeaders = { ...details.responseHeaders };
+    
+    // Remove or modify CSP if present
+    delete responseHeaders['content-security-policy'];
+    delete responseHeaders['Content-Security-Policy'];
+    delete responseHeaders['x-content-security-policy'];
+    delete responseHeaders['X-Content-Security-Policy'];
+    
+    callback({ responseHeaders });
   });
 
   // Show loading page
