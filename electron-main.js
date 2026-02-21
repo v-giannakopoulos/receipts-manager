@@ -98,25 +98,26 @@ function startFlask() {
   }
 }
 
-// ── Robust Flask readiness: verify it returns actual HTML ───────────────────
+// ── Wait until Flask is ready (accept any non-error HTTP status) ────────────────
 function waitForFlask(url, retries, callback, errorCallback) {
   const req = http.get(url, (res) => {
-    let body = '';
-    res.on('data', chunk => { body += chunk; });
-    res.on('end', () => {
-      // Make sure Flask is serving real HTML, not just responding
-      if (res.statusCode === 200 && body.includes('<!DOCTYPE html>')) {
-        console.log('[Electron] Flask is ready and serving HTML!');
-        callback();
-      } else {
-        console.warn(`[Electron] Flask responded but content not ready (status=${res.statusCode}, bodyLen=${body.length}), retrying...`);
-        if (retries <= 0) {
-          errorCallback('Flask is responding but not serving the app correctly.');
-          return;
-        }
-        setTimeout(() => waitForFlask(url, retries - 1, callback, errorCallback), 500);
+    // Drain response body so socket is released properly
+    res.resume();
+    const status = res.statusCode;
+    console.log(`[Electron] Flask responded with status: ${status}`);
+
+    // Accept any HTTP response (200, 301, 302, etc.) — Flask is up
+    if (status < 500) {
+      console.log('[Electron] Flask is ready!');
+      callback();
+    } else {
+      // Server error - retry
+      if (retries <= 0) {
+        errorCallback(`Flask returned server error status: ${status}`);
+        return;
       }
-    });
+      setTimeout(() => waitForFlask(url, retries - 1, callback, errorCallback), 500);
+    }
   });
   req.setTimeout(2000, () => req.destroy());
   req.on('error', () => {
@@ -139,14 +140,13 @@ function loadAppWithRetry(retriesLeft) {
   console.log(`[Electron] Loading ${FLASK_URL} (attempts left: ${retriesLeft})...`);
   mainWindow.loadURL(FLASK_URL);
 
-  // If page fails to load, retry
   mainWindow.webContents.once('did-fail-load', (event, errorCode, errorDescription) => {
     console.error(`[Electron] Page failed to load: ${errorCode} ${errorDescription}`);
     if (retriesLeft > 0) {
       console.log('[Electron] Retrying in 1 second...');
       setTimeout(() => loadAppWithRetry(retriesLeft - 1), 1000);
     } else {
-      showErrorPage(`Page failed to load after multiple attempts.\nError: ${errorDescription} (${errorCode})`);
+      showErrorPage(`Page failed to load.\nError: ${errorDescription} (${errorCode})`);
     }
   });
 
@@ -186,7 +186,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false,
-      partition: SESSION_PARTITION  // isolated session, avoids shared handler conflicts
+      partition: SESSION_PARTITION
     }
   });
 
@@ -204,16 +204,14 @@ function createWindow() {
 
   mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(loadingHtml));
 
-  // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // Open DevTools for debugging (uncomment if needed)
+  // Uncomment to debug in DevTools:
   // mainWindow.webContents.openDevTools();
 
-  // Wait for Flask to be truly ready (checks HTML content, not just connection)
   console.log(`[Electron] Waiting for Flask at ${FLASK_URL}...`);
   waitForFlask(FLASK_URL, 60,
     () => loadAppWithRetry(5),
@@ -232,7 +230,7 @@ app.whenReady().then(async () => {
   console.log('[Electron] Is packaged:', app.isPackaged);
   console.log('[Electron] __dirname:', __dirname);
 
-  // Remove CSP headers ONCE on the named session (not inside createWindow)
+  // Register CSP header removal ONCE on the named session
   const ses = session.fromPartition(SESSION_PARTITION);
   ses.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders };
@@ -243,7 +241,7 @@ app.whenReady().then(async () => {
     callback({ responseHeaders });
   });
 
-  // Kill stale port process and wait longer for OS to release port
+  // Kill stale process and wait for OS to fully release the port
   killPortProcess(5000);
   await new Promise(r => setTimeout(r, 1500));
 
