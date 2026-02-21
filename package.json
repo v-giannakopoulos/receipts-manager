@@ -34,12 +34,10 @@
             "arm64"
           ]
         }
-      ],
-      "icon": "icon.icns"
+      ]
     },
     "dmg": {
       "title": "Receipt Manager",
-      "icon": "icon.icns",
       "window": {
         "width": 600,
         "height": 400
