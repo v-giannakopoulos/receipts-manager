@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -6,18 +6,17 @@ const fs = require('fs');
 
 let flaskProcess = null;
 let mainWindow   = null;
+let startupError = null;
 
 // ── Get the correct base directory ────────────────────────────────────────
 function getAppDir() {
-  // In production (packaged app), unpacked files are in app.asar.unpacked
-  // In development, they're in the current directory
   const isDev = !app.isPackaged;
   
   if (isDev) {
     return __dirname;
   }
   
-  // In production, check if app.asar.unpacked exists
+  // In production, use app.asar.unpacked for Python files
   const unpackedPath = __dirname.replace('app.asar', 'app.asar.unpacked');
   if (fs.existsSync(unpackedPath)) {
     console.log('[App] Using unpacked path:', unpackedPath);
@@ -33,10 +32,8 @@ function findPython() {
   const appDir = getAppDir();
   
   const possiblePaths = [
-    // Try venv first (for development)
     path.join(appDir, 'venv', 'bin', 'python3'),
     path.join(appDir, 'venv', 'bin', 'python'),
-    // Then system Python locations
     '/usr/local/bin/python3',
     '/opt/homebrew/bin/python3',
     '/usr/bin/python3',
@@ -51,13 +48,17 @@ function findPython() {
   }
   
   console.error('[Python] Could not find Python3!');
-  console.error('[Python] Searched paths:', possiblePaths);
-  return 'python3'; // fallback
+  startupError = 'Python 3 not found. Please install Python 3 from python.org';
+  return null;
 }
 
 // ── Start the Python/Flask server ──────────────────────────────────────────
 function startFlask() {
   const pythonPath = findPython();
+  if (!pythonPath) {
+    return false;
+  }
+  
   const appDir = getAppDir();
   const appPath = path.join(appDir, 'app.py');
 
@@ -68,26 +69,40 @@ function startFlask() {
 
   if (!fs.existsSync(appPath)) {
     console.error('[Flask] ERROR: app.py not found at:', appPath);
-    console.error('[Flask] Directory contents:', fs.readdirSync(appDir).slice(0, 20));
-    return;
+    startupError = `Cannot find app.py at: ${appPath}`;
+    return false;
   }
 
-  flaskProcess = spawn(pythonPath, [appPath], {
-    cwd: appDir,
-    env: { ...process.env, FLASK_ENV: 'production', PYTHONUNBUFFERED: '1' }
-  });
+  try {
+    flaskProcess = spawn(pythonPath, [appPath], {
+      cwd: appDir,
+      env: { ...process.env, FLASK_ENV: 'production', PYTHONUNBUFFERED: '1' }
+    });
 
-  flaskProcess.stdout.on('data', d => console.log('[Flask]', d.toString().trim()));
-  flaskProcess.stderr.on('data', d => console.error('[Flask]', d.toString().trim()));
-  flaskProcess.on('error', err => {
-    console.error('[Flask] Failed to start:', err);
-    console.error('[Flask] Python path:', pythonPath);
-    console.error('[Flask] App path:', appPath);
-  });
+    flaskProcess.stdout.on('data', d => console.log('[Flask]', d.toString().trim()));
+    flaskProcess.stderr.on('data', d => {
+      const msg = d.toString().trim();
+      console.error('[Flask]', msg);
+      if (msg.includes('Error') || msg.includes('Traceback')) {
+        startupError = msg;
+      }
+    });
+    
+    flaskProcess.on('error', err => {
+      console.error('[Flask] Failed to start:', err);
+      startupError = `Failed to start Flask: ${err.message}`;
+    });
+    
+    return true;
+  } catch (err) {
+    console.error('[Flask] Exception starting Flask:', err);
+    startupError = `Exception starting Flask: ${err.message}`;
+    return false;
+  }
 }
 
 // ── Wait until Flask is ready, then open the window ───────────────────────
-function waitForFlask(url, retries, callback) {
+function waitForFlask(url, retries, callback, errorCallback) {
   http.get(url, () => {
     console.log('[Electron] Flask is responding!');
     callback();
@@ -95,11 +110,72 @@ function waitForFlask(url, retries, callback) {
   .on('error', () => {
     if (retries <= 0) { 
       console.error('[Electron] Flask never started after 30 seconds!');
-      console.error('[Electron] Check the console above for Flask errors.');
+      const error = startupError || 'Flask server failed to start after 30 seconds. Check if Python and dependencies are installed.';
+      errorCallback(error);
       return; 
     }
-    setTimeout(() => waitForFlask(url, retries - 1, callback), 500);
+    setTimeout(() => waitForFlask(url, retries - 1, callback, errorCallback), 500);
   });
+}
+
+// ── Show error in window ───────────────────────────────────────────────────
+function showErrorPage(errorMessage) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Startup Error</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          padding: 40px;
+          background: #f5f5f5;
+        }
+        .error-box {
+          background: white;
+          padding: 30px;
+          border-radius: 10px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          max-width: 600px;
+          margin: 0 auto;
+        }
+        h1 { color: #d32f2f; margin-top: 0; }
+        pre {
+          background: #f5f5f5;
+          padding: 15px;
+          border-radius: 5px;
+          overflow-x: auto;
+          font-size: 12px;
+        }
+        .help {
+          margin-top: 20px;
+          padding: 15px;
+          background: #e3f2fd;
+          border-radius: 5px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="error-box">
+        <h1>⚠️ Startup Error</h1>
+        <p>Receipt Manager could not start the Flask server.</p>
+        <pre>${errorMessage}</pre>
+        <div class="help">
+          <strong>Troubleshooting:</strong>
+          <ul>
+            <li>Make sure Python 3 is installed</li>
+            <li>Check if Flask dependencies are installed</li>
+            <li>Try running from Terminal to see detailed logs</li>
+          </ul>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  if (mainWindow) {
+    mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  }
 }
 
 // ── Create the main app window ─────────────────────────────────────────────
@@ -108,24 +184,80 @@ function createWindow() {
     width:  1400,
     height: 900,
     title:  'Receipt & Warranty Manager',
+    backgroundColor: '#ffffff',
     webPreferences: {
       nodeIntegration:  false,
       contextIsolation: true
     }
   });
 
-  // Open external links in the real browser, not inside the app
+  // Show loading page
+  const loadingHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Loading...</title>
+      <style>
+        body {
+          margin: 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        .loader {
+          text-align: center;
+        }
+        .spinner {
+          border: 4px solid rgba(255,255,255,0.3);
+          border-top: 4px solid white;
+          border-radius: 50%;
+          width: 50px;
+          height: 50px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 20px;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        h2 { margin: 10px 0; }
+        p { opacity: 0.9; }
+      </style>
+    </head>
+    <body>
+      <div class="loader">
+        <div class="spinner"></div>
+        <h2>Receipt Manager</h2>
+        <p>Starting Flask server...</p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(loadingHtml));
+
+  // Open external links in the real browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // Wait up to 30 seconds for Flask, then load
+  // Wait for Flask
   console.log('[Electron] Waiting for Flask to start at http://127.0.0.1:5000 ...');
-  waitForFlask('http://127.0.0.1:5000', 60, () => {
-    console.log('[Electron] Loading app window...');
-    mainWindow.loadURL('http://127.0.0.1:5000');
-  });
+  waitForFlask('http://127.0.0.1:5000', 60, 
+    () => {
+      console.log('[Electron] Loading app window...');
+      mainWindow.loadURL('http://127.0.0.1:5000');
+    },
+    (error) => {
+      console.error('[Electron] Flask startup failed:', error);
+      showErrorPage(error);
+    }
+  );
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
@@ -135,7 +267,14 @@ app.whenReady().then(() => {
   console.log('[Electron] App is ready, starting Flask...');
   console.log('[Electron] Is packaged:', app.isPackaged);
   console.log('[Electron] __dirname:', __dirname);
-  startFlask();
+  
+  const flaskStarted = startFlask();
+  
+  if (!flaskStarted && startupError) {
+    // Show error dialog immediately
+    dialog.showErrorBox('Startup Error', startupError);
+  }
+  
   createWindow();
 });
 
