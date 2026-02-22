@@ -18,6 +18,7 @@
     "productName": "Receipt Manager",
     "asar": true,
     "asarUnpack": [
+      "config.py",
       "app.py",
       "ocr_service.py",
       "venv/**/*",
